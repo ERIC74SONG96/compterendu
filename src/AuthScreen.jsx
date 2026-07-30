@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Flame, Loader2, Mail, Lock, User } from "lucide-react";
+import { Flame, Loader2, Mail, Lock, User, CheckCircle2, XCircle, Info } from "lucide-react";
 import { signIn, signUp } from "./auth";
 
 const ORANGE = "#DF7B1A";
@@ -15,13 +15,23 @@ export default function AuthScreen({ onMessage }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [chargement, setChargement] = useState(false);
+  const [attenteConfirmation, setAttenteConfirmation] = useState(null);
+  const [alerte, setAlerte] = useState(null);
+
+  const afficherAlerte = (texte, ok = true) => {
+    setAlerte({ texte, ok });
+    onMessage(texte, ok);
+    if (ok && !texte.includes("e-mail")) {
+      window.setTimeout(() => setAlerte(null), 5000);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     if (mode === "signup") {
-      if (!chef.trim()) { onMessage("Indiquez votre nom de chef d'équipe.", false); return; }
-      if (password.length < 6) { onMessage("Le mot de passe doit contenir au moins 6 caractères.", false); return; }
-      if (password !== confirm) { onMessage("Les mots de passe ne correspondent pas.", false); return; }
+      if (!chef.trim()) { afficherAlerte("Indiquez votre nom de chef d'équipe.", false); return; }
+      if (password.length < 6) { afficherAlerte("Le mot de passe doit contenir au moins 6 caractères.", false); return; }
+      if (password !== confirm) { afficherAlerte("Les mots de passe ne correspondent pas.", false); return; }
     }
 
     setChargement(true);
@@ -29,15 +39,22 @@ export default function AuthScreen({ onMessage }) {
       if (mode === "login") {
         const { error } = await signIn(email.trim(), password);
         if (error) throw error;
-        onMessage("Connexion réussie.");
+        afficherAlerte("Connexion réussie.");
       } else {
         const { data, error } = await signUp(email.trim(), password, chef);
         if (error) throw error;
-        if (data.session) {
-          onMessage("Compte créé — bienvenue !");
-        } else {
-          onMessage("Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.");
+        const emailInscrit = email.trim();
+        const confirmationRequise = !data.session
+          || (data.user && !data.user.email_confirmed_at);
+
+        if (confirmationRequise) {
+          setAttenteConfirmation(emailInscrit);
           setMode("login");
+          setPassword("");
+          setConfirm("");
+          afficherAlerte("Compte créé — consultez votre e-mail pour confirmer.");
+        } else {
+          afficherAlerte("Compte créé — bienvenue !");
         }
       }
     } catch (err) {
@@ -47,9 +64,12 @@ export default function AuthScreen({ onMessage }) {
         : err.message?.includes("Invalid login")
           ? "E-mail ou mot de passe incorrect."
           : err.message?.includes("already registered")
-            ? "Cet e-mail est déjà utilisé."
+            ? "Cet e-mail est déjà utilisé. Si vous venez de vous inscrire, confirmez d'abord votre e-mail."
             : err.message || "Erreur de connexion.";
-      onMessage(msg, false);
+      if (msg.includes("non confirmé") || msg.includes("confirmez")) {
+        setAttenteConfirmation(email.trim());
+      }
+      afficherAlerte(msg, false);
     }
     setChargement(false);
   };
@@ -79,7 +99,7 @@ export default function AuthScreen({ onMessage }) {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setMode(t.id)}
+                onClick={() => { setMode(t.id); if (t.id === "signup") setAttenteConfirmation(null); }}
                 className="flex-1 py-2.5 text-sm font-semibold transition-colors"
                 style={{
                   backgroundColor: mode === t.id ? ORANGE : "transparent",
@@ -90,6 +110,43 @@ export default function AuthScreen({ onMessage }) {
               </button>
             ))}
           </div>
+
+          {attenteConfirmation && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3.5 flex gap-3 items-start"
+              style={{ backgroundColor: "#E8F4FD", border: "2px solid #5B9BD5", fontFamily: "system-ui, sans-serif" }}
+              role="alert"
+            >
+              <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "#2E6DA4" }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm" style={{ color: "#1A4A72" }}>Confirmez votre adresse e-mail</p>
+                <p className="text-sm mt-1.5 leading-relaxed" style={{ color: "#2E5A7A" }}>
+                  Un message a été envoyé à{" "}
+                  <strong className="break-all">{attenteConfirmation}</strong>.
+                  Ouvrez votre boîte mail (vérifiez aussi les <strong>spams</strong>), cliquez sur le lien de confirmation, puis revenez ici pour vous connecter.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAttenteConfirmation(null)}
+                  className="mt-2 text-xs font-semibold underline"
+                  style={{ color: "#2E6DA4" }}
+                >
+                  Masquer ce message
+                </button>
+              </div>
+            </div>
+          )}
+
+          {alerte && (!attenteConfirmation || !alerte.ok) && (
+            <div
+              className="mb-4 rounded-lg px-4 py-2.5 text-sm font-medium text-white flex items-center gap-2"
+              style={{ backgroundColor: alerte.ok ? "#4A7C2A" : "#B3402A", fontFamily: "system-ui, sans-serif" }}
+              role="status"
+            >
+              {alerte.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+              {alerte.texte}
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-4" style={{ fontFamily: "system-ui, sans-serif" }}>
             {mode === "signup" && (
