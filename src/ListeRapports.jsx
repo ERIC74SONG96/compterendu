@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AffichageMembreDisciple } from "./AffichageMembre";
 import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle, Pencil, Trash2, ClipboardList,
 } from "lucide-react";
@@ -209,30 +210,9 @@ export function ListeRapports({
                       {/* B — Membres suivis (disciples) */}
                       {(r.membres || []).length > 0 && (
                         <BlocSection lettre="B" titre="Membres suivis — compte rendu de chaque disciple">
-                          <div className="space-y-2">
-                            {r.membres.map((m, i) => (
-                              <div key={i} className="rounded-lg px-3 py-2" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="font-semibold text-sm">{m.nom}</p>
-                                  <div className="flex items-center gap-2 text-xs" style={{ fontFamily: "system-ui, sans-serif" }}>
-                                    <span className="font-bold" style={{ color: ORANGE_DARK }}>
-                                      {scoreMembre(m)}/{ROUTINES.length} routines
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-full font-semibold"
-                                      style={{ backgroundColor: m.presence ? "#EAF3E2" : "#F9E3DC", color: m.presence ? "#4A7C2A" : "#B3402A" }}>
-                                      {m.presence ? "Présent" : "Absent"}
-                                    </span>
-                                  </div>
-                                </div>
-                                {scoreMembre(m) > 0 && (
-                                  <p className="text-xs mt-1 leading-relaxed" style={{ color: "#8A7358" }}>
-                                    {ROUTINES.filter((rt) => m.routines && m.routines[rt]).map((rt) => {
-                                      const temps = estRoutinePriere(rt) ? formaterTempsPriere(m.routines_temps?.[rt]) : null;
-                                      return temps ? `${rt} (${temps})` : rt;
-                                    }).join(" · ")}
-                                  </p>
-                                )}
-                              </div>
+                          <div className="space-y-4">
+                            {r.membres.filter((m) => m.nom?.trim()).map((m, i) => (
+                              <AffichageMembreDisciple key={i} membre={m} scoreTotal={ROUTINES.length} />
                             ))}
                           </div>
                         </BlocSection>

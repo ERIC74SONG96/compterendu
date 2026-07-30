@@ -7,6 +7,7 @@ import {
 import AuthScreen from "./AuthScreen";
 import AdminPanel from "./AdminPanel";
 import { ListeRapports } from "./ListeRapports";
+import { AffichageMembreDisciple } from "./AffichageMembre";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
@@ -724,26 +725,7 @@ function TableauDeBord({
           </p>
           {rapports.flatMap((r) =>
             (r.membres || []).filter((m) => m.nom?.trim()).map((m) => (
-              <div key={`${r.id}|${m.nom}`} className="rounded-lg px-4 py-3 flex items-center gap-3" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>
-                <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-white shrink-0 text-lg"
-                  style={{ backgroundColor: ORANGE, fontFamily: "system-ui, sans-serif" }}>
-                  {m.nom.trim().charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-base">{m.nom.trim()}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-                    {r.semaine || "Semaine en cours"} · {scoreMembre(m)}/12 routines
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-semibold shrink-0"
-                  style={{
-                    backgroundColor: m.presence ? "#EAF3E2" : "#F9E3DC",
-                    color: m.presence ? "#4A7C2A" : "#B3402A",
-                    fontFamily: "system-ui, sans-serif",
-                  }}>
-                  {m.presence ? "Présent" : "Absent"}
-                </span>
-              </div>
+              <AffichageMembreDisciple key={`${r.id}|${m.nom}`} membre={m} scoreTotal={ROUTINES.length} />
             ))
           )}
         </section>
