@@ -32,17 +32,39 @@ const ROUTINES = [
   "Les comptes rendus",
 ];
 
+const ROUTINES_PRIERE = new Set(["La prière seul", "La prière avec les autres"]);
+
 const FIDELITE = [
-  { key: "priere", label: "J'ai prié pour chaque membre avec le bulletin de prière des jeunes convertis" },
+  { key: "priere", label: "J'ai prié pour chaque membre avec le bulletin de prière des jeunes convertis", avecTemps: true },
   { key: "jeune", label: "J'ai fait mon jeûne partiel de la semaine pour mes disciples" },
   { key: "rencontre", label: "J'ai tenu la rencontre d'équipe en présentiel" },
   { key: "evangelisation", label: "J'ai évangélisé des étudiants cette semaine (campus, camarades, voisins)" },
 ];
 
-const emptyMembre = () => ({ nom: "", routines: {}, presence: false });
+const tempsPriereVide = () => ({ heures: 0, minutes: 0 });
+
+function estRoutinePriere(routine) {
+  return ROUTINES_PRIERE.has(routine);
+}
+
+function formaterTempsPriere(temps) {
+  if (!temps) return null;
+  const h = Number(temps.heures) || 0;
+  const m = Number(temps.minutes) || 0;
+  if (h === 0 && m === 0) return null;
+  const parts = [];
+  if (h > 0) parts.push(`${h} h`);
+  if (m > 0) parts.push(`${m} min`);
+  return parts.join(" ");
+}
+
+const emptyMembre = () => ({ nom: "", routines: {}, routines_temps: {}, presence: false });
 const emptyForm = () => ({
   chef: "", eglise: "", semaine: "",
-  fidelite: { priere: null, jeune: null, rencontre: null, evangelisation: null },
+  fidelite: {
+    priere: null, priere_temps: tempsPriereVide(),
+    jeune: null, rencontre: null, evangelisation: null,
+  },
   membres: [emptyMembre(), emptyMembre()],
   observations: "",
 });
@@ -202,9 +224,16 @@ export default function CompteRenduApp() {
     }
     setForm({
       chef: r.chef || "", eglise: r.eglise || "", semaine: r.semaine || "",
-      fidelite: { priere: null, jeune: null, rencontre: null, evangelisation: null, ...(r.fidelite || {}) },
+      fidelite: {
+        priere: null, jeune: null, rencontre: null, evangelisation: null,
+        ...(r.fidelite || {}),
+        priere_temps: r.fidelite?.priere_temps || tempsPriereVide(),
+      },
       membres: (r.membres && r.membres.length ? r.membres : [emptyMembre()]).map((m) => ({
-        nom: m.nom || "", routines: m.routines || {}, presence: !!m.presence,
+        nom: m.nom || "",
+        routines: m.routines || {},
+        routines_temps: m.routines_temps || {},
+        presence: !!m.presence,
       })),
       observations: r.observations || "",
     });
@@ -215,7 +244,15 @@ export default function CompteRenduApp() {
 
   // ---- Helpers formulaire ----
   const setFidelite = (key, val) =>
-    setForm((f) => ({ ...f, fidelite: { ...f.fidelite, [key]: val } }));
+    setForm((f) => {
+      const fidelite = { ...f.fidelite, [key]: val };
+      if (key === "priere" && val !== true) fidelite.priere_temps = tempsPriereVide();
+      if (key === "priere" && val === true && !fidelite.priere_temps) fidelite.priere_temps = tempsPriereVide();
+      return { ...f, fidelite };
+    });
+
+  const setFideliteTemps = (temps) =>
+    setForm((f) => ({ ...f, fidelite: { ...f.fidelite, priere_temps: temps } }));
 
   const setMembre = (i, patch) =>
     setForm((f) => ({
@@ -226,10 +263,21 @@ export default function CompteRenduApp() {
   const toggleRoutine = (i, routine) =>
     setForm((f) => ({
       ...f,
-      membres: f.membres.map((m, j) =>
-        j === i ? { ...m, routines: { ...m.routines, [routine]: !m.routines[routine] } } : m
-      ),
+      membres: f.membres.map((m, j) => {
+        if (j !== i) return m;
+        const cochee = !m.routines[routine];
+        const routines = { ...m.routines, [routine]: cochee };
+        const routines_temps = { ...(m.routines_temps || {}) };
+        if (estRoutinePriere(routine)) {
+          if (cochee) routines_temps[routine] = routines_temps[routine] || tempsPriereVide();
+          else delete routines_temps[routine];
+        }
+        return { ...m, routines, routines_temps };
+      }),
     }));
+
+  const setRoutineTemps = (i, routine, temps) =>
+    setMembre(i, { routines_temps: { ...(form.membres[i]?.routines_temps || {}), [routine]: temps } });
 
   const ajouterMembre = () =>
     setForm((f) => (f.membres.length >= 8 ? f : { ...f, membres: [...f.membres, emptyMembre()] }));
@@ -387,9 +435,9 @@ export default function CompteRenduApp() {
         {vue === "form" ? (
           <FormulaireRapport
             form={form} setForm={setForm} editId={editId}
-            setFidelite={setFidelite} setMembre={setMembre}
-            toggleRoutine={toggleRoutine} ajouterMembre={ajouterMembre}
-            retirerMembre={retirerMembre} enregistrer={enregistrer}
+            setFidelite={setFidelite} setFideliteTemps={setFideliteTemps}
+            setMembre={setMembre} toggleRoutine={toggleRoutine} setRoutineTemps={setRoutineTemps}
+            ajouterMembre={ajouterMembre} retirerMembre={retirerMembre} enregistrer={enregistrer}
             sauvegarde={sauvegarde} eglises={eglises}
             onAjouterEglise={handleAjouterEglise}
             annulerEdition={() => { setForm(formDepuisProfil(session.user.user_metadata)); setEditId(null); }}
@@ -414,7 +462,7 @@ export default function CompteRenduApp() {
 
 // ============ Formulaire ============
 function FormulaireRapport({
-  form, setForm, editId, setFidelite, setMembre, toggleRoutine,
+  form, setForm, editId, setFidelite, setFideliteTemps, setMembre, toggleRoutine, setRoutineTemps,
   ajouterMembre, retirerMembre, enregistrer, sauvegarde, annulerEdition, eglises, onAjouterEglise,
 }) {
   return (
@@ -437,14 +485,25 @@ function FormulaireRapport({
         <TitreSection lettre="A" titre="Ma fidélité de chef d'équipe cette semaine" />
         <div className="divide-y" style={{ backgroundColor: "white", borderColor: "#F5E7CF" }}>
           {FIDELITE.map((c) => (
-            <div key={c.key} className="px-4 py-3 flex items-center justify-between gap-3">
-              <p className="text-sm leading-snug flex-1">{c.label}</p>
-              <div className="flex gap-1.5 shrink-0" style={{ fontFamily: "system-ui, sans-serif" }}>
-                <BoutonOuiNon actif={form.fidelite[c.key] === true} type="oui"
-                  onClick={() => setFidelite(c.key, form.fidelite[c.key] === true ? null : true)} />
-                <BoutonOuiNon actif={form.fidelite[c.key] === false} type="non"
-                  onClick={() => setFidelite(c.key, form.fidelite[c.key] === false ? null : false)} />
+            <div key={c.key} className="px-4 py-3" style={{ backgroundColor: "white" }}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm leading-snug flex-1">{c.label}</p>
+                <div className="flex gap-1.5 shrink-0" style={{ fontFamily: "system-ui, sans-serif" }}>
+                  <BoutonOuiNon actif={form.fidelite[c.key] === true} type="oui"
+                    onClick={() => setFidelite(c.key, form.fidelite[c.key] === true ? null : true)} />
+                  <BoutonOuiNon actif={form.fidelite[c.key] === false} type="non"
+                    onClick={() => setFidelite(c.key, form.fidelite[c.key] === false ? null : false)} />
+                </div>
               </div>
+              {c.avecTemps && form.fidelite[c.key] === true && (
+                <div className="mt-2 pl-1">
+                  <ChampTempsPriere
+                    label="Temps de prière"
+                    value={form.fidelite.priere_temps || tempsPriereVide()}
+                    onChange={setFideliteTemps}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -456,7 +515,7 @@ function FormulaireRapport({
         <div className="p-3 space-y-3" style={{ backgroundColor: "white" }}>
           {form.membres.map((m, i) => (
             <CarteMembre key={i} index={i} membre={m}
-              setMembre={setMembre} toggleRoutine={toggleRoutine}
+              setMembre={setMembre} toggleRoutine={toggleRoutine} setRoutineTemps={setRoutineTemps}
               retirer={form.membres.length > 1 ? () => retirerMembre(i) : null} />
           ))}
           <button onClick={ajouterMembre}
@@ -665,12 +724,22 @@ function TableauDeBord({
                         <ul className="space-y-1">
                           {FIDELITE.map((c) => {
                             const v = r.fidelite ? r.fidelite[c.key] : null;
+                            const temps = c.avecTemps && v === true
+                              ? formaterTempsPriere(r.fidelite?.priere_temps)
+                              : null;
                             return (
                               <li key={c.key} className="flex items-start gap-2 text-sm">
                                 {v === true ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#4A7C2A" }} />
                                   : v === false ? <XCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#B3402A" }} />
                                   : <span className="w-4 h-4 mt-0.5 shrink-0 rounded-full border" style={{ borderColor: "#C9B394" }} />}
-                                <span style={{ color: v === false ? "#B3402A" : INK }}>{c.label}</span>
+                                <span style={{ color: v === false ? "#B3402A" : INK }}>
+                                  {c.label}
+                                  {temps && (
+                                    <span className="block text-xs font-semibold mt-0.5" style={{ color: ORANGE_DARK }}>
+                                      Temps de prière : {temps}
+                                    </span>
+                                  )}
+                                </span>
                               </li>
                             );
                           })}
@@ -703,7 +772,12 @@ function TableauDeBord({
                                 </div>
                                 {scoreMembre(m) > 0 && (
                                   <p className="text-xs mt-1 leading-relaxed" style={{ color: "#8A7358" }}>
-                                    {ROUTINES.filter((rt) => m.routines && m.routines[rt]).join(" · ")}
+                                    {ROUTINES.filter((rt) => m.routines && m.routines[rt]).map((rt) => {
+                                      const temps = estRoutinePriere(rt)
+                                        ? formaterTempsPriere(m.routines_temps?.[rt])
+                                        : null;
+                                      return temps ? `${rt} (${temps})` : rt;
+                                    }).join(" · ")}
                                   </p>
                                 )}
                               </div>
@@ -999,7 +1073,7 @@ function TitreSection({ lettre, titre }) {
 function BoutonOuiNon({ actif, type, onClick }) {
   const ok = type === "oui";
   return (
-    <button onClick={onClick}
+    <button type="button" onClick={onClick}
       className="px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
       style={{
         backgroundColor: actif ? (ok ? "#4A7C2A" : "#B3402A") : "#F3EADA",
@@ -1010,7 +1084,45 @@ function BoutonOuiNon({ actif, type, onClick }) {
   );
 }
 
-function CarteMembre({ index, membre, setMembre, toggleRoutine, retirer }) {
+function ChampTempsPriere({ label, value, onChange }) {
+  const maj = (champ, raw) => {
+    const max = champ === "heures" ? 23 : 59;
+    const num = Math.min(max, Math.max(0, parseInt(raw, 10) || 0));
+    onChange({ ...value, [champ]: num });
+  };
+
+  return (
+    <div style={{ fontFamily: "system-ui, sans-serif" }}>
+      {label && (
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
+      )}
+      <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0} max={23} inputMode="numeric"
+            value={value?.heures ?? 0}
+            onChange={(e) => maj("heures", e.target.value)}
+            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none"
+            style={{ border: "1px solid #E8D5B8", backgroundColor: "white" }}
+          />
+          <span className="text-xs" style={{ color: "#8A7358" }}>h</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0} max={59} inputMode="numeric"
+            value={value?.minutes ?? 0}
+            onChange={(e) => maj("minutes", e.target.value)}
+            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none"
+            style={{ border: "1px solid #E8D5B8", backgroundColor: "white" }}
+          />
+          <span className="text-xs" style={{ color: "#8A7358" }}>min</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CarteMembre({ index, membre, setMembre, toggleRoutine, setRoutineTemps, retirer }) {
   const [ouvert, setOuvert] = useState(index === 0);
   const coches = ROUTINES.filter((r) => membre.routines[r]).length;
 
@@ -1055,17 +1167,29 @@ function CarteMembre({ index, membre, setMembre, toggleRoutine, retirer }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {ROUTINES.map((r) => {
               const cochee = !!membre.routines[r];
+              const priere = estRoutinePriere(r);
               return (
-                <button key={r} onClick={() => toggleRoutine(index, r)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-sm"
-                  style={{
-                    backgroundColor: cochee ? "#FBF1E3" : "white",
-                    border: `1px solid ${cochee ? ORANGE : "#E8D5B8"}`,
-                    color: INK,
-                  }}>
-                  <Case cochee={cochee} />
-                  <span className="leading-tight">{r}</span>
-                </button>
+                <div key={r} className="space-y-1">
+                  <button type="button" onClick={() => toggleRoutine(index, r)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-sm"
+                    style={{
+                      backgroundColor: cochee ? "#FBF1E3" : "white",
+                      border: `1px solid ${cochee ? ORANGE : "#E8D5B8"}`,
+                      color: INK,
+                    }}>
+                    <Case cochee={cochee} />
+                    <span className="leading-tight">{r}</span>
+                  </button>
+                  {priere && cochee && (
+                    <div className="px-2 pb-1">
+                      <ChampTempsPriere
+                        label="Durée"
+                        value={membre.routines_temps?.[r] || tempsPriereVide()}
+                        onChange={(t) => setRoutineTemps(index, r, t)}
+                      />
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
