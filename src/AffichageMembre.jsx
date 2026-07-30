@@ -1,5 +1,5 @@
-import React from "react";
-import { CheckCircle2, XCircle, User, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { CheckCircle2, XCircle, User, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
@@ -70,30 +70,39 @@ function LigneRoutine({ label, faite, temps }) {
   );
 }
 
-export function AffichageMembreDisciple({ membre, scoreTotal = 12, onSupprimer = null }) {
+export function AffichageMembreDisciple({ membre, scoreTotal = 12, onSupprimer = null, pliable = true }) {
   if (!membre?.nom?.trim()) return null;
 
   const nom = membre.nom.trim();
   const score = ROUTINE_GROUPS.flatMap((g) => g.items).filter((r) => membre.routines?.[r]).length;
+  const [ouvert, setOuvert] = useState(false);
 
   return (
     <article className="rounded-xl overflow-hidden" style={{ border: "1px solid #F0DCBE", backgroundColor: CREAM }}>
-      {/* En-tête disciple */}
-      <div className="px-4 py-3 flex items-center gap-3" style={{ backgroundColor: "white", borderBottom: "1px solid #F0DCBE" }}>
+      {/* En-tête disciple — cliquable si pliable */}
+      <div
+        className={`px-4 py-3 flex items-center gap-3 ${pliable ? "cursor-pointer select-none" : ""}`}
+        style={{ backgroundColor: "white", borderBottom: ouvert || !pliable ? "1px solid #F0DCBE" : "none" }}
+        onClick={pliable ? () => setOuvert((o) => !o) : undefined}
+        onKeyDown={pliable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOuvert((o) => !o); } } : undefined}
+        role={pliable ? "button" : undefined}
+        tabIndex={pliable ? 0 : undefined}
+        aria-expanded={pliable ? ouvert : undefined}
+      >
         <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: ORANGE }}>
           <User className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-base leading-tight">{nom}</p>
           <p className="text-xs mt-0.5" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-            Compte rendu du disciple
+            {ouvert || !pliable ? "Compte rendu du disciple" : `${score}/${scoreTotal} routines · ${membre.presence ? "Présent" : "Absent"}`}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0" style={{ fontFamily: "system-ui, sans-serif" }}>
+        <div className="flex items-center gap-2 shrink-0" style={{ fontFamily: "system-ui, sans-serif" }}>
           {onSupprimer && (
             <button
               type="button"
-              onClick={() => onSupprimer(nom)}
+              onClick={(e) => { e.stopPropagation(); onSupprimer(nom); }}
               className="text-xs font-semibold px-2 py-1 rounded-lg flex items-center gap-1"
               style={{ backgroundColor: "#F9E3DC", color: "#B3402A", border: "1px solid #E8B4A8" }}
               title="Retirer ce membre du rapport"
@@ -102,20 +111,27 @@ export function AffichageMembreDisciple({ membre, scoreTotal = 12, onSupprimer =
             </button>
           )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ backgroundColor: CARD, color: ORANGE_DARK }}>
-            {score}/{scoreTotal} routines
+            {score}/{scoreTotal}
           </span>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+          {pliable && (
+            ouvert
+              ? <ChevronUp className="w-5 h-5" style={{ color: ORANGE_DARK }} />
+              : <ChevronDown className="w-5 h-5" style={{ color: ORANGE_DARK }} />
+          )}
+        </div>
+      </div>
+
+      {(!pliable || ouvert) && (
+      <div className="p-3 space-y-3" style={{ fontFamily: "system-ui, sans-serif" }}>
+        <p className="text-xs px-1" style={{ color: "#8A7358" }}>
+          <span className="font-semibold px-2 py-0.5 rounded-full mr-1"
             style={{
               backgroundColor: membre.presence ? "#EAF3E2" : "#F9E3DC",
               color: membre.presence ? "#4A7C2A" : "#B3402A",
             }}>
             {membre.presence ? "Présent à la rencontre" : "Absent à la rencontre"}
           </span>
-        </div>
-      </div>
-
-      {/* Routines par catégorie */}
-      <div className="p-3 space-y-3" style={{ fontFamily: "system-ui, sans-serif" }}>
+        </p>
         {ROUTINE_GROUPS.map((groupe) => {
           const faites = groupe.items.filter((r) => membre.routines?.[r]).length;
           return (
@@ -143,6 +159,7 @@ export function AffichageMembreDisciple({ membre, scoreTotal = 12, onSupprimer =
           );
         })}
       </div>
+      )}
     </article>
   );
 }

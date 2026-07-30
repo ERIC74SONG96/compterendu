@@ -45,7 +45,11 @@ const FIDELITE = [
   { key: "evangelisation", label: "J'ai évangélisé des étudiants cette semaine (campus, camarades, voisins)" },
 ];
 
-const tempsPriereVide = () => ({ heures: 0, minutes: 0 });
+const tempsPriereVide = () => ({ heures: null, minutes: null });
+
+function tempsPriereAffichable(temps) {
+  return temps || tempsPriereVide();
+}
 
 function estRoutinePriere(routine) {
   return ROUTINES_PRIERE.has(routine);
@@ -65,14 +69,14 @@ function formaterTempsPriere(temps) {
 const emptyMembre = () => ({ nom: "", routines: {}, routines_temps: {}, presence: false });
 
 const emptyComptePerso = () => ({
-  bible_chapitres: 0,
+  bible_chapitres: null,
   priere_seul: tempsPriereVide(),
   priere_groupe: tempsPriereVide(),
-  veilles_matinales: 0,
-  meditations_nombre: 0,
+  veilles_matinales: null,
+  meditations_nombre: null,
   meditation_temps: tempsPriereVide(),
   livre_nom: "",
-  livre_pages: 0,
+  livre_pages: null,
 });
 
 const emptyForm = () => ({
@@ -146,14 +150,15 @@ export default function CompteRenduApp() {
   }, [editId]);
 
   // ---- Chargement des rapports partagés ----
-  const charger = useCallback(async () => {
+  const charger = useCallback(async (options = {}) => {
+    const silencieux = options.silencieux === true;
     if (!isConfigured() || !session) {
       setRapports([]);
-      setChargement(false);
+      if (!silencieux) setChargement(false);
       setErreurStockage(!isConfigured());
       return;
     }
-    setChargement(true);
+    if (!silencieux) setChargement(true);
     setErreurStockage(false);
     try {
       const valides = await loadRapports();
@@ -163,7 +168,7 @@ export default function CompteRenduApp() {
       setRapports([]);
       setErreurStockage(true);
     }
-    setChargement(false);
+    if (!silencieux) setChargement(false);
   }, [session]);
 
   useEffect(() => { if (session) charger(); }, [charger, session]);
@@ -204,13 +209,6 @@ export default function CompteRenduApp() {
     || rapportsEquipe[0]?.chef?.trim()
     || session?.user?.email
     || "";
-
-  // Actualisation automatique pour voir les rapports des autres membres
-  useEffect(() => {
-    if (vue !== "dashboard" && vue !== "admin") return;
-    const interval = setInterval(charger, 45000);
-    return () => clearInterval(interval);
-  }, [vue, charger]);
 
   // ---- Enregistrement ----
   const enregistrer = async () => {
@@ -636,7 +634,7 @@ function FormulaireRapport({
                 <div className="mt-2 pl-1">
                   <ChampTempsPriere
                     label="Temps de prière"
-                    value={form.fidelite.priere_temps || tempsPriereVide()}
+                    value={tempsPriereAffichable(form.fidelite.priere_temps)}
                     onChange={setFideliteTemps}
                   />
                 </div>
@@ -716,7 +714,7 @@ function TableauDeBord({
   modifier, supprimer, supprimerMembreDuRapport, scoreFidelite, scoreMembre, currentUserId,
   egliseMaison = "", chefChambre = false, admin = false, peutGererRapport = null,
 }) {
-  if (chargement) {
+  if (chargement && !rapports.length) {
     return (
       <div className="py-16 flex flex-col items-center gap-3" style={{ color: BROWN, fontFamily: "system-ui, sans-serif" }}>
         <Loader2 className="w-7 h-7 animate-spin" style={{ color: ORANGE }} />
@@ -1099,15 +1097,27 @@ function TitreSection({ lettre, titre }) {
   );
 }
 
-function ChampNombre({ label, value, onChange, min = 0, max = 9999 }) {
+function ChampNombre({ label, value, onChange, min = 0, max = 9999, placeholder = "0" }) {
+  const afficher = value == null || value === "" ? "" : String(value);
+
   return (
     <label className="block" style={{ fontFamily: "system-ui, sans-serif" }}>
       <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
       <input
-        type="number" min={min} max={max} inputMode="numeric"
-        value={value ?? 0}
-        onChange={(e) => onChange(Math.min(max, Math.max(min, parseInt(e.target.value, 10) || 0)))}
-        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
+        type="text"
+        inputMode="numeric"
+        placeholder={placeholder}
+        value={afficher}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const raw = e.target.value.replace(/\D/g, "");
+          if (raw === "") {
+            onChange(null);
+            return;
+          }
+          onChange(Math.min(max, Math.max(min, parseInt(raw, 10))));
+        }}
+        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none placeholder:text-[#B8A48C]"
         style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM }}
       />
     </label>
@@ -1128,12 +1138,12 @@ function SectionComptePerso({ compte, onChange }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <ChampTempsPriere
           label="Prière seul"
-          value={compte.priere_seul || tempsPriereVide()}
+          value={tempsPriereAffichable(compte.priere_seul)}
           onChange={(t) => set("priere_seul", t)}
         />
         <ChampTempsPriere
           label="Prière en groupe"
-          value={compte.priere_groupe || tempsPriereVide()}
+          value={tempsPriereAffichable(compte.priere_groupe)}
           onChange={(t) => set("priere_groupe", t)}
         />
       </div>
@@ -1155,7 +1165,7 @@ function SectionComptePerso({ compte, onChange }) {
         />
         <ChampTempsPriere
           label="Temps de méditation"
-          value={compte.meditation_temps || tempsPriereVide()}
+          value={tempsPriereAffichable(compte.meditation_temps)}
           onChange={(t) => set("meditation_temps", t)}
         />
       </div>
@@ -1230,10 +1240,19 @@ function BoutonOuiNon({ actif, type, onClick }) {
 }
 
 function ChampTempsPriere({ label, value, onChange }) {
+  const v = tempsPriereAffichable(value);
+
+  const afficher = (n) => (n == null || n === 0 ? "" : String(n));
+
   const maj = (champ, raw) => {
     const max = champ === "heures" ? 23 : 59;
-    const num = Math.min(max, Math.max(0, parseInt(raw, 10) || 0));
-    onChange({ ...value, [champ]: num });
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits === "") {
+      onChange({ ...v, [champ]: null });
+      return;
+    }
+    const num = Math.min(max, parseInt(digits, 10));
+    onChange({ ...v, [champ]: Number.isNaN(num) ? null : num });
   };
 
   return (
@@ -1244,20 +1263,26 @@ function ChampTempsPriere({ label, value, onChange }) {
       <div className="flex items-center gap-2 mt-1">
         <div className="flex items-center gap-1">
           <input
-            type="number" min={0} max={23} inputMode="numeric"
-            value={value?.heures ?? 0}
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            value={afficher(v.heures)}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => maj("heures", e.target.value)}
-            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none"
+            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none placeholder:text-[#B8A48C]"
             style={{ border: "1px solid #E8D5B8", backgroundColor: "white" }}
           />
           <span className="text-xs" style={{ color: "#8A7358" }}>h</span>
         </div>
         <div className="flex items-center gap-1">
           <input
-            type="number" min={0} max={59} inputMode="numeric"
-            value={value?.minutes ?? 0}
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            value={afficher(v.minutes)}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => maj("minutes", e.target.value)}
-            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none"
+            className="w-14 rounded-md px-2 py-1.5 text-sm text-center outline-none placeholder:text-[#B8A48C]"
             style={{ border: "1px solid #E8D5B8", backgroundColor: "white" }}
           />
           <span className="text-xs" style={{ color: "#8A7358" }}>min</span>
@@ -1268,7 +1293,7 @@ function ChampTempsPriere({ label, value, onChange }) {
 }
 
 function CarteMembre({ index, membre, setMembre, toggleRoutine, setRoutineTemps, retirer }) {
-  const [ouvert, setOuvert] = useState(index === 0);
+  const [ouvert, setOuvert] = useState(false);
   const coches = ROUTINES.filter((r) => membre.routines[r]).length;
 
   return (
@@ -1329,7 +1354,7 @@ function CarteMembre({ index, membre, setMembre, toggleRoutine, setRoutineTemps,
                     <div className="px-2 pb-1">
                       <ChampTempsPriere
                         label="Durée"
-                        value={membre.routines_temps?.[r] || tempsPriereVide()}
+                        value={tempsPriereAffichable(membre.routines_temps?.[r])}
                         onChange={(t) => setRoutineTemps(index, r, t)}
                       />
                     </div>
