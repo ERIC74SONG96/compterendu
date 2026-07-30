@@ -126,20 +126,16 @@ export function ListeRapports({
               const fid = scoreFidelite(r.fidelite);
               const peutEditer = canEditAll || !r.user_id || r.user_id === currentUserId;
               const nomsDisciples = (r.membres || []).map((m) => m.nom?.trim()).filter(Boolean);
-              const estMonRapport = r.user_id === currentUserId;
-              const initiale = estMonRapport && nomsDisciples.length
+              const estMonRapport = String(r.user_id || "") === String(currentUserId || "");
+              const initiale = nomsDisciples.length
                 ? nomsDisciples[0].charAt(0).toUpperCase()
                 : (r.chef || "?").trim().charAt(0).toUpperCase();
-              const titre = estMonRapport && nomsDisciples.length
+              const titre = nomsDisciples.length
                 ? nomsDisciples.join(", ")
                 : (r.chef || "?");
               const sousTitre = estMonRapport
-                ? (r.semaine ? `Mon équipe · ${r.semaine}` : "Mon équipe")
-                : [
-                    r.chef ? `Chef ${r.chef}` : null,
-                    nomsDisciples.length ? `Disciples : ${nomsDisciples.join(", ")}` : "Aucun disciple",
-                    r.eglise ? r.eglise : null,
-                  ].filter(Boolean).join(" · ");
+                ? [r.semaine || null, r.chef ? `Chef ${r.chef}` : null].filter(Boolean).join(" · ") || "Mon équipe"
+                : [r.chef ? `Chef ${r.chef}` : null, r.semaine || null].filter(Boolean).join(" · ");
               return (
                 <article key={r.id} className="rounded-xl shadow-sm overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
                   <button
@@ -156,7 +152,7 @@ export function ListeRapports({
                       <p className="text-xs mt-0.5 truncate" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
                         {sousTitre}
                       </p>
-                      {nomsDisciples.length > 0 && !estMonRapport && (
+                      {nomsDisciples.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {nomsDisciples.map((nom) => (
                             <span key={nom} className="text-xs font-semibold px-2 py-0.5 rounded-full"

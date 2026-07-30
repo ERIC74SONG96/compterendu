@@ -191,6 +191,11 @@ export default function CompteRenduApp() {
 
   const rapportsEquipe = filtrerRapportsEquipe(rapports, profil, session);
   const egliseEquipe = getEgliseMaison(profil, session);
+  const nomAffiche = profil?.chef_name?.trim()
+    || session?.user?.user_metadata?.chef_name?.trim()
+    || rapportsEquipe[0]?.chef?.trim()
+    || session?.user?.email
+    || "";
 
   // Actualisation automatique pour voir les rapports des autres membres
   useEffect(() => {
@@ -404,7 +409,7 @@ export default function CompteRenduApp() {
                   Compte rendu hebdomadaire
                 </h1>
                 <p className="text-sm mt-0.5 truncate" style={{ color: "#FCE3C6", fontFamily: "system-ui, sans-serif" }}>
-                  {profil?.chef_name?.trim() || session.user.user_metadata?.chef_name?.trim() || session.user.email}
+                  <span className="font-semibold">{nomAffiche}</span>
                   {profil && (
                     <span className="ml-2 opacity-90">· {libelleRole(profil)}</span>
                   )}
@@ -709,6 +714,38 @@ function TableauDeBord({
           {" "}— vous supervisez toutes les équipes et leurs membres.
         </p>
       )}
+      {!chefChambre && rapports.some((r) => (r.membres || []).some((m) => m.nom?.trim())) && (
+        <section className="rounded-xl p-4 space-y-3" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
+          <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
+            Mes disciples
+          </h2>
+          {rapports.flatMap((r) =>
+            (r.membres || []).filter((m) => m.nom?.trim()).map((m) => (
+              <div key={`${r.id}|${m.nom}`} className="rounded-lg px-4 py-3 flex items-center gap-3" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-white shrink-0 text-lg"
+                  style={{ backgroundColor: ORANGE, fontFamily: "system-ui, sans-serif" }}>
+                  {m.nom.trim().charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-base">{m.nom.trim()}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
+                    {r.semaine || "Semaine en cours"} · {scoreMembre(m)}/12 routines
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold shrink-0"
+                  style={{
+                    backgroundColor: m.presence ? "#EAF3E2" : "#F9E3DC",
+                    color: m.presence ? "#4A7C2A" : "#B3402A",
+                    fontFamily: "system-ui, sans-serif",
+                  }}>
+                  {m.presence ? "Présent" : "Absent"}
+                </span>
+              </div>
+            ))
+          )}
+        </section>
+      )}
+
       {/* Bandeau progression vers 100 disciples */}
       <section className="rounded-xl overflow-hidden shadow-sm" style={{ backgroundColor: ORANGE }}>
         <div className="px-4 pt-4 pb-3" style={{ fontFamily: "system-ui, sans-serif" }}>
