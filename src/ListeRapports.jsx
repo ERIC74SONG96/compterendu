@@ -105,7 +105,8 @@ function AffichageComptePerso({ compte }) {
 
 export function ListeRapports({
   rapports, ouverts, setOuverts, modifier, supprimer, supprimerMembreDuRapport,
-  scoreFidelite, scoreMembre, currentUserId, canEditAll = false, peutEditerRapport = null,
+  scoreFidelite, scoreMembre, currentUserId, canEditAll = false,
+  peutEditerRapport = null, peutSupprimerRapport = null,
   messageVide = "Aucun rapport.",
 }) {
   const [confirmation, setConfirmation] = useState(null);
@@ -136,8 +137,11 @@ export function ListeRapports({
             {liste.map((r) => {
               const ouvert = !!ouverts[r.id];
               const fid = scoreFidelite(r.fidelite);
-              const peutEditer = peutEditerRapport
+              const peutModifier = peutEditerRapport
                 ? peutEditerRapport(r)
+                : (canEditAll || !r.user_id || r.user_id === currentUserId);
+              const peutSupprimer = peutSupprimerRapport
+                ? peutSupprimerRapport(r)
                 : (canEditAll || !r.user_id || r.user_id === currentUserId);
               const nomsDisciples = (r.membres || []).map((m) => m.nom?.trim()).filter(Boolean);
               const chefNom = (r.chef || "?").trim();
@@ -219,7 +223,7 @@ export function ListeRapports({
                                 membre={m}
                                 scoreTotal={ROUTINES.length}
                                 onSupprimer={
-                                  supprimerMembreDuRapport && peutEditer
+                                  supprimerMembreDuRapport && peutModifier
                                     ? () => supprimerMembreDuRapport(r.id, m.nom)
                                     : null
                                 }
@@ -243,14 +247,17 @@ export function ListeRapports({
                         </BlocSection>
                       )}
 
-                      {peutEditer && (
+                      {(peutModifier || peutSupprimer) && (
                         <div className="flex gap-2 pt-1" style={{ fontFamily: "system-ui, sans-serif" }}>
+                          {peutModifier && (
                           <button type="button" onClick={() => modifier(r)}
                             className="flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
                             style={{ border: `1.5px solid ${ORANGE}`, color: ORANGE_DARK }}>
                             <Pencil className="w-3.5 h-3.5" /> Modifier
                           </button>
-                          {confirmation === r.id ? (
+                          )}
+                          {peutSupprimer && (
+                          confirmation === r.id ? (
                             <button type="button" onClick={() => { supprimer(r.id); setConfirmation(null); }}
                               className="flex-1 py-2 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-1.5"
                               style={{ backgroundColor: "#B3402A" }}>
@@ -258,10 +265,11 @@ export function ListeRapports({
                             </button>
                           ) : (
                             <button type="button" onClick={() => setConfirmation(r.id)}
-                              className="py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
+                              className={`py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 ${peutModifier ? "" : "flex-1"}`}
                               style={{ border: "1.5px solid #D9A79A", color: "#B3402A" }}>
                               <Trash2 className="w-3.5 h-3.5" /> Supprimer
                             </button>
+                          )
                           )}
                         </div>
                       )}

@@ -11,7 +11,7 @@ import { AffichageMembreDisciple } from "./AffichageMembre";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
-import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole, LIBELLE_CHEF_EGLISE, deleteUserAccount, peutGererRapport } from "./profiles";
+import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole, LIBELLE_CHEF_EGLISE, deleteUserAccount, peutGererRapport, peutSupprimerRapport } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -260,6 +260,11 @@ export default function CompteRenduApp() {
   };
 
   const supprimer = async (id) => {
+    const rapport = rapports.find((r) => r.id === id);
+    if (rapport && !peutSupprimerRapport(rapport, profil, session, admin)) {
+      notifier("Vous ne pouvez supprimer que vos propres rapports.", false);
+      return;
+    }
     try {
       await deleteRapport(id);
       notifier("Rapport supprimé.");
@@ -311,8 +316,8 @@ export default function CompteRenduApp() {
   };
 
   const modifier = (r) => {
-    if (r.user_id && session && r.user_id !== session.user.id && !admin) {
-      notifier("Vous ne pouvez modifier que vos propres rapports.", false);
+    if (!peutGererRapport(r, profil, session, admin)) {
+      notifier("Vous ne pouvez modifier que les rapports que vous supervisez.", false);
       return;
     }
     setForm({
@@ -578,6 +583,7 @@ export default function CompteRenduApp() {
             chefChambre={chefChambre}
             admin={admin}
             peutGererRapport={(r) => peutGererRapport(r, profil, session, admin)}
+            peutSupprimerRapport={(r) => peutSupprimerRapport(r, profil, session, admin)}
           />
         )}
 
@@ -712,7 +718,8 @@ function FormulaireRapport({
 function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
   modifier, supprimer, supprimerMembreDuRapport, scoreFidelite, scoreMembre, currentUserId,
-  egliseMaison = "", chefChambre = false, admin = false, peutGererRapport = null,
+  egliseMaison = "", chefChambre = false, admin = false,
+  peutGererRapport = null, peutSupprimerRapport = null,
 }) {
   if (chargement && !rapports.length) {
     return (
@@ -853,6 +860,7 @@ function TableauDeBord({
         scoreMembre={scoreMembre}
         currentUserId={currentUserId}
         peutEditerRapport={peutGererRapport}
+        peutSupprimerRapport={peutSupprimerRapport}
       />
     </div>
   );

@@ -88,3 +88,10 @@ export function peutGererRapport(rapport, profil, session, admin = false) {
   }
   return false;
 }
+
+/** Suppression : propre rapport ou grand admin uniquement. */
+export function peutSupprimerRapport(rapport, profil, session, admin = false) {
+  if (admin) return true;
+  const userId = session?.user?.id;
+  return !!userId && rapport?.user_id === userId;
+}
