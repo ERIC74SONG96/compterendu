@@ -1,4 +1,5 @@
 import { getSession, supabase } from "./auth";
+import { eglisesCorrespondent } from "./eglises";
 
 export async function loadProfil() {
   const session = await getSession();
@@ -56,11 +57,10 @@ export function libelleRole(profil) {
  */
 export function filtrerRapportsEquipe(rapports, profil, session) {
   const userId = session?.user?.id;
-  if (isChefChambre(profil) || isAdmin(profil)) {
+  if (isChefChambre(profil)) {
     const eglise = getEgliseMaison(profil, session);
     if (!eglise) return rapports.filter((r) => r.user_id === userId);
-    const norm = eglise.toLowerCase();
-    return rapports.filter((r) => (r.eglise || "").trim().toLowerCase() === norm);
+    return rapports.filter((r) => eglisesCorrespondent(r.eglise, eglise));
   }
   return rapports.filter((r) => r.user_id === userId);
 }
