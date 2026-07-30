@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
-  Target, HandHeart, AlertCircle
+  Target, HandHeart, AlertCircle, LogOut
 } from "lucide-react";
-import { isConfigured, loadRapports, storage } from "./storage";
+import AuthScreen from "./AuthScreen";
+import { isConfigured, onAuthStateChange, signOut } from "./auth";
+import { deleteRapport, loadRapports, saveRapport } from "./storage";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -46,6 +48,8 @@ const emptyForm = () => ({
 
 // ============ Composant principal ============
 export default function CompteRenduApp() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [vue, setVue] = useState("form"); // form | dashboard
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
@@ -61,12 +65,27 @@ export default function CompteRenduApp() {
     setTimeout(() => setMessage(null), 3500);
   };
 
+  useEffect(() => {
+    if (!isConfigured()) {
+      setAuthLoading(false);
+      return;
+    }
+    const { data: { subscription } } = onAuthStateChange((s) => {
+      setSession(s);
+      setAuthLoading(false);
+      if (s?.user?.user_metadata?.chef_name && !editId) {
+        setForm((f) => (f.chef.trim() ? f : { ...f, chef: s.user.user_metadata.chef_name }));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [editId]);
+
   // ---- Chargement des rapports partagés ----
   const charger = useCallback(async () => {
-    if (!isConfigured()) {
+    if (!isConfigured() || !session) {
       setRapports([]);
       setChargement(false);
-      setErreurStockage(true);
+      setErreurStockage(!isConfigured());
       return;
     }
     setChargement(true);
@@ -80,9 +99,9 @@ export default function CompteRenduApp() {
       setErreurStockage(true);
     }
     setChargement(false);
-  }, []);
+  }, [session]);
 
-  useEffect(() => { charger(); }, [charger]);
+  useEffect(() => { if (session) charger(); }, [charger, session]);
 
   // Actualisation automatique pour voir les rapports des autres membres
   useEffect(() => {
@@ -93,6 +112,7 @@ export default function CompteRenduApp() {
 
   // ---- Enregistrement ----
   const enregistrer = async () => {
+    if (!session) { notifier("Connectez-vous pour enregistrer.", false); return; }
     if (!form.chef.trim()) { notifier("Indiquez le nom du chef d'équipe.", false); return; }
     if (!form.semaine.trim()) { notifier("Indiquez la semaine concernée.", false); return; }
     setSauvegarde(true);
@@ -100,18 +120,21 @@ export default function CompteRenduApp() {
     const donnees = {
       ...form,
       membres: form.membres.filter((m) => m.nom.trim() !== ""),
-      id, ts: editId ? (rapports.find((r) => r.id === editId)?.ts || Date.now()) : Date.now(),
+      id,
+      user_id: session.user.id,
+      ts: editId ? (rapports.find((r) => r.id === editId)?.ts || Date.now()) : Date.now(),
       modifie: editId ? Date.now() : undefined,
     };
     try {
-      const ok = await storage.set(`rapport:${id}`, JSON.stringify(donnees), true);
-      if (!ok) throw new Error("échec");
+      await saveRapport(donnees);
       notifier(editId ? "Rapport mis à jour." : "Rapport enregistré et partagé avec le groupe.");
-      setForm(emptyForm());
       setEditId(null);
+      setForm(session.user.user_metadata?.chef_name
+        ? { ...emptyForm(), chef: session.user.user_metadata.chef_name }
+        : emptyForm());
       await charger();
       setVue("dashboard");
-    } catch (e) {
+    } catch {
       setErreurStockage(true);
       notifier("Impossible d'enregistrer. Réessayez.", false);
     }
@@ -120,7 +143,7 @@ export default function CompteRenduApp() {
 
   const supprimer = async (id) => {
     try {
-      await storage.delete(`rapport:${id}`, true);
+      await deleteRapport(id);
       notifier("Rapport supprimé.");
       setRapports((rs) => rs.filter((r) => r.id !== id));
     } catch {
@@ -129,6 +152,10 @@ export default function CompteRenduApp() {
   };
 
   const modifier = (r) => {
+    if (r.user_id && session && r.user_id !== session.user.id) {
+      notifier("Vous ne pouvez modifier que vos propres rapports.", false);
+      return;
+    }
     setForm({
       chef: r.chef || "", eglise: r.eglise || "", semaine: r.semaine || "",
       fidelite: { priere: null, jeune: null, rencontre: null, evangelisation: null, ...(r.fidelite || {}) },
@@ -169,6 +196,40 @@ export default function CompteRenduApp() {
   const scoreFidelite = (fid) => FIDELITE.filter((c) => fid && fid[c.key] === true).length;
   const scoreMembre = (m) => ROUTINES.filter((r) => m.routines && m.routines[r]).length;
 
+  const deconnecter = async () => {
+    await signOut();
+    setRapports([]);
+    setForm(emptyForm());
+    setEditId(null);
+    setVue("form");
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: CREAM, fontFamily: "system-ui, sans-serif", color: BROWN }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: ORANGE }} />
+      </div>
+    );
+  }
+
+  if (!isConfigured()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: CREAM, fontFamily: "system-ui, sans-serif" }}>
+        <div className="max-w-md rounded-lg px-4 py-3 text-sm flex gap-3 items-start" style={{ backgroundColor: "#FFF4E5", border: "1px solid #F0DCBE", color: BROWN }}>
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: ORANGE_DARK }} />
+          <div>
+            <p className="font-bold">Supabase non configuré</p>
+            <p className="mt-1">Ajoutez vos clés dans <code>.env</code> ou sur Vercel.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen onMessage={notifier} />;
+  }
+
   // ============ RENDU ============
   return (
     <div className="min-h-screen" style={{ backgroundColor: CREAM, color: INK, fontFamily: "Georgia, 'Times New Roman', serif" }}>
@@ -176,18 +237,28 @@ export default function CompteRenduApp() {
       <div style={{ height: 6, backgroundColor: "#E6E6E6" }} />
       <header className="px-4 py-5 sm:py-6" style={{ backgroundColor: ORANGE }}>
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full p-2.5 shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.18)" }}>
-              <Flame className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="rounded-full p-2.5 shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.18)" }}>
+                <Flame className="w-6 h-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-white text-xl sm:text-2xl font-bold leading-tight tracking-wide">
+                  Compte rendu hebdomadaire
+                </h1>
+                <p className="text-sm mt-0.5 truncate" style={{ color: "#FCE3C6", fontFamily: "system-ui, sans-serif" }}>
+                  {session.user.email}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-white text-xl sm:text-2xl font-bold leading-tight tracking-wide">
-                Compte rendu hebdomadaire
-              </h1>
-              <p className="text-sm mt-0.5" style={{ color: "#FCE3C6", fontFamily: "system-ui, sans-serif" }}>
-                Stratégie 100 disciples — étape 2026 du but quinquennal
-              </p>
-            </div>
+            <button
+              onClick={deconnecter}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white"
+              style={{ backgroundColor: "rgba(255,255,255,0.18)", fontFamily: "system-ui, sans-serif" }}
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Déconnexion</span>
+            </button>
           </div>
         </div>
       </header>
@@ -267,11 +338,12 @@ export default function CompteRenduApp() {
             ouverts={ouverts} setOuverts={setOuverts}
             modifier={modifier} supprimer={supprimer}
             scoreFidelite={scoreFidelite} scoreMembre={scoreMembre}
+            currentUserId={session.user.id}
           />
         )}
 
         <p className="mt-8 text-center text-xs" style={{ color: "#A08A6B", fontFamily: "system-ui, sans-serif" }}>
-          Les rapports enregistrés ici sont visibles par tous ceux qui ont accès à cette application.
+          Connecté en tant que chef d&apos;équipe. Les rapports sont visibles par tous les chefs connectés.
         </p>
       </main>
     </div>
@@ -370,7 +442,7 @@ function FormulaireRapport({
 // ============ Tableau de bord ============
 function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
-  modifier, supprimer, scoreFidelite, scoreMembre,
+  modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
 }) {
   const [confirmation, setConfirmation] = useState(null);
 
@@ -587,7 +659,8 @@ function TableauDeBord({
                         </div>
                       )}
 
-                      {/* Actions */}
+                      {/* Actions — uniquement ses propres rapports */}
+                      {(!r.user_id || r.user_id === currentUserId) && (
                       <div className="flex gap-2 pt-1" style={{ fontFamily: "system-ui, sans-serif" }}>
                         <button onClick={() => modifier(r)}
                           className="flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
@@ -608,6 +681,7 @@ function TableauDeBord({
                           </button>
                         )}
                       </div>
+                      )}
                     </div>
                   )}
                 </article>

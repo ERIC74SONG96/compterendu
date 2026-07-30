@@ -1,58 +1,47 @@
-import { createClient } from "@supabase/supabase-js";
+import { getSession, isConfigured, supabase } from "./auth";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+export { isConfigured };
 
-let client = null;
-
-function getClient() {
-  if (!url || !key) throw new Error("SUPABASE_NON_CONFIGURE");
-  if (!client) client = createClient(url, key);
-  return client;
-}
-
-export function isConfigured() {
-  return Boolean(url && key);
-}
-
-/** Chargement optimisé en une seule requête */
 export async function loadRapports() {
-  const { data, error } = await getClient()
+  const { data, error } = await supabase
     .from("rapports")
-    .select("data")
+    .select("data, user_id")
     .order("ts", { ascending: false });
   if (error) throw error;
-  return (data || []).map((row) => row.data);
+  return (data || []).map((row) => ({
+    ...row.data,
+    user_id: row.user_id || row.data?.user_id,
+  }));
 }
 
+export async function saveRapport(rapport) {
+  const session = await getSession();
+  if (!session) throw new Error("NON_CONNECTE");
+
+  const payload = { ...rapport, user_id: session.user.id };
+  const { error } = await supabase.from("rapports").upsert({
+    id: rapport.id,
+    user_id: session.user.id,
+    data: payload,
+    ts: rapport.ts || Date.now(),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  return true;
+}
+
+export async function deleteRapport(id) {
+  const { error } = await supabase.from("rapports").delete().eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
+/** @deprecated compatibilité */
 export const storage = {
-  async list(prefix) {
-    const { data, error } = await getClient().from("rapports").select("id");
-    if (error) throw error;
-    return { keys: (data || []).map((r) => `${prefix}${r.id}`) };
-  },
-
-  async get(key) {
-    const id = key.replace(/^rapport:/, "");
-    const { data, error } = await getClient().from("rapports").select("data").eq("id", id).maybeSingle();
-    if (error || !data) return null;
-    return { value: JSON.stringify(data.data) };
-  },
-
   async set(_key, value) {
-    const rapport = JSON.parse(value);
-    const { error } = await getClient().from("rapports").upsert({
-      id: rapport.id,
-      data: rapport,
-      ts: rapport.ts || Date.now(),
-      updated_at: new Date().toISOString(),
-    });
-    return !error;
+    return saveRapport(JSON.parse(value));
   },
-
   async delete(key) {
-    const id = key.replace(/^rapport:/, "");
-    const { error } = await getClient().from("rapports").delete().eq("id", id);
-    return !error;
+    return deleteRapport(key.replace(/^rapport:/, ""));
   },
 };
