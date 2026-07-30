@@ -21,9 +21,12 @@ export default function AuthScreen({ onMessage }) {
   const [limiteEmail, setLimiteEmail] = useState(false);
 
   const afficherAlerte = (texte, ok = true) => {
-    setAlerte({ texte, ok });
-    onMessage(texte, ok);
-    if (ok && !texte.includes("e-mail")) {
+    const message = typeof texte === "string" && texte.trim() && texte.trim() !== "{}"
+      ? texte.trim()
+      : "Une erreur est survenue. Réessayez.";
+    setAlerte({ texte: message, ok });
+    onMessage(message, ok);
+    if (ok && !message.includes("e-mail")) {
       window.setTimeout(() => setAlerte(null), 5000);
     }
   };
@@ -45,6 +48,18 @@ export default function AuthScreen({ onMessage }) {
       } else {
         const { data, error } = await signUp(email.trim(), password, chef);
         if (error) throw error;
+
+        // Compte créé mais e-mail non envoyé (erreur SMTP silencieuse)
+        if (data?.user && !data.session && !data.user.email_confirmed_at) {
+          setAttenteConfirmation(email.trim());
+          setMode("login");
+          setPassword("");
+          setConfirm("");
+          afficherAlerte("Compte créé — consultez votre e-mail pour confirmer.");
+          setChargement(false);
+          return;
+        }
+
         const emailInscrit = email.trim();
         const confirmationRequise = !data.session
           || (data.user && !data.user.email_confirmed_at);
@@ -62,6 +77,7 @@ export default function AuthScreen({ onMessage }) {
     } catch (err) {
       const { type, texte } = traduireErreurAuth(err);
       if (type === "rate_limit") setLimiteEmail(true);
+      if (type === "smtp") setLimiteEmail(true);
       if (type === "email_non_confirme" || type === "deja_inscrit") {
         setAttenteConfirmation(email.trim());
         if (type === "deja_inscrit") setMode("login");
@@ -81,6 +97,7 @@ export default function AuthScreen({ onMessage }) {
     } catch (err) {
       const { type, texte } = traduireErreurAuth(err);
       if (type === "rate_limit") setLimiteEmail(true);
+      if (type === "smtp") setLimiteEmail(true);
       afficherAlerte(texte, false);
     }
     setRenvoiEnCours(false);
@@ -186,14 +203,14 @@ export default function AuthScreen({ onMessage }) {
             </div>
           )}
 
-          {alerte && (!attenteConfirmation || !alerte.ok) && (
+          {alerte && (!attenteConfirmation || !alerte.ok) && alerte.texte && (
             <div
-              className="mb-4 rounded-lg px-4 py-2.5 text-sm font-medium text-white flex items-center gap-2"
+              className="mb-4 rounded-lg px-4 py-3 text-sm font-medium text-white flex items-start gap-2"
               style={{ backgroundColor: alerte.ok ? "#4A7C2A" : "#B3402A", fontFamily: "system-ui, sans-serif" }}
               role="status"
             >
-              {alerte.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
-              {alerte.texte}
+              {alerte.ok ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+              <span className="leading-snug">{alerte.texte}</span>
             </div>
           )}
 
