@@ -33,6 +33,14 @@ export async function signOut() {
   return supabase.auth.signOut();
 }
 
+export async function updateProfil({ chefName, egliseMaison }) {
+  if (!supabase) throw new Error("SUPABASE_NON_CONFIGURE");
+  const data = {};
+  if (chefName !== undefined) data.chef_name = chefName;
+  if (egliseMaison !== undefined) data.eglise_maison = egliseMaison;
+  return supabase.auth.updateUser({ data });
+}
+
 export async function getSession() {
   if (!supabase) return null;
   const { data: { session } } = await supabase.auth.getSession();

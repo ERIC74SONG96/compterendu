@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
   Target, HandHeart, AlertCircle, LogOut, Calendar, ChevronLeft, ChevronRight
 } from "lucide-react";
 import AuthScreen from "./AuthScreen";
-import { isConfigured, onAuthStateChange, signOut } from "./auth";
+import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 
 // ============ Constantes ============
@@ -46,6 +46,14 @@ const emptyForm = () => ({
   observations: "",
 });
 
+function formDepuisProfil(meta = {}) {
+  return {
+    ...emptyForm(),
+    chef: meta.chef_name?.trim() || "",
+    eglise: meta.eglise_maison?.trim() || "",
+  };
+}
+
 // ============ Composant principal ============
 export default function CompteRenduApp() {
   const [session, setSession] = useState(null);
@@ -73,8 +81,13 @@ export default function CompteRenduApp() {
     const { data: { subscription } } = onAuthStateChange((s) => {
       setSession(s);
       setAuthLoading(false);
-      if (s?.user?.user_metadata?.chef_name && !editId) {
-        setForm((f) => (f.chef.trim() ? f : { ...f, chef: s.user.user_metadata.chef_name }));
+      if (s?.user && !editId) {
+        const meta = s.user.user_metadata || {};
+        setForm((f) => ({
+          ...f,
+          chef: f.chef.trim() ? f.chef : (meta.chef_name?.trim() || ""),
+          eglise: f.eglise.trim() ? f.eglise : (meta.eglise_maison?.trim() || ""),
+        }));
       }
     });
     return () => subscription.unsubscribe();
@@ -127,11 +140,21 @@ export default function CompteRenduApp() {
     };
     try {
       await saveRapport(donnees);
+      if (form.eglise.trim() || form.chef.trim()) {
+        await updateProfil({
+          chefName: form.chef.trim() || undefined,
+          egliseMaison: form.eglise.trim() || undefined,
+        });
+      }
       notifier(editId ? "Rapport mis à jour." : "Rapport enregistré et partagé avec le groupe.");
       setEditId(null);
-      setForm(session.user.user_metadata?.chef_name
-        ? { ...emptyForm(), chef: session.user.user_metadata.chef_name }
-        : emptyForm());
+      setForm({
+        ...formDepuisProfil({
+          ...session.user.user_metadata,
+          chef_name: form.chef.trim() || session.user.user_metadata?.chef_name,
+          eglise_maison: form.eglise.trim() || session.user.user_metadata?.eglise_maison,
+        }),
+      });
       await charger();
       setVue("dashboard");
     } catch {
@@ -195,6 +218,17 @@ export default function CompteRenduApp() {
 
   const scoreFidelite = (fid) => FIDELITE.filter((c) => fid && fid[c.key] === true).length;
   const scoreMembre = (m) => ROUTINES.filter((r) => m.routines && m.routines[r]).length;
+
+  const eglisesConnues = useMemo(() => {
+    const noms = new Set();
+    rapports.forEach((r) => {
+      if (r.eglise?.trim()) noms.add(r.eglise.trim());
+    });
+    if (session?.user?.user_metadata?.eglise_maison?.trim()) {
+      noms.add(session.user.user_metadata.eglise_maison.trim());
+    }
+    return Array.from(noms).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [rapports, session]);
 
   const deconnecter = async () => {
     await signOut();
@@ -329,8 +363,8 @@ export default function CompteRenduApp() {
             setFidelite={setFidelite} setMembre={setMembre}
             toggleRoutine={toggleRoutine} ajouterMembre={ajouterMembre}
             retirerMembre={retirerMembre} enregistrer={enregistrer}
-            sauvegarde={sauvegarde}
-            annulerEdition={() => { setForm(emptyForm()); setEditId(null); }}
+            sauvegarde={sauvegarde} eglisesConnues={eglisesConnues}
+            annulerEdition={() => { setForm(formDepuisProfil(session.user.user_metadata)); setEditId(null); }}
           />
         ) : (
           <TableauDeBord
@@ -353,7 +387,7 @@ export default function CompteRenduApp() {
 // ============ Formulaire ============
 function FormulaireRapport({
   form, setForm, editId, setFidelite, setMembre, toggleRoutine,
-  ajouterMembre, retirerMembre, enregistrer, sauvegarde, annulerEdition,
+  ajouterMembre, retirerMembre, enregistrer, sauvegarde, annulerEdition, eglisesConnues,
 }) {
   return (
     <div className="space-y-5">
@@ -362,8 +396,9 @@ function FormulaireRapport({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ fontFamily: "system-ui, sans-serif" }}>
           <Champ label="Chef d'équipe" valeur={form.chef}
             onChange={(v) => setForm((f) => ({ ...f, chef: v }))} placeholder="Ex. : Junior" />
-          <Champ label="Église de maison" valeur={form.eglise}
-            onChange={(v) => setForm((f) => ({ ...f, eglise: v }))} placeholder="Ex. : Joseph" />
+          <ChampEglise label="Église de maison" valeur={form.eglise}
+            onChange={(v) => setForm((f) => ({ ...f, eglise: v }))}
+            options={eglisesConnues} />
           <ChampSemaine label="Semaine" valeur={form.semaine}
             onChange={(v) => setForm((f) => ({ ...f, semaine: v }))} />
         </div>
@@ -821,6 +856,46 @@ function ChampSemaine({ label, valeur, onChange }) {
       {valeur && (
         <p className="text-xs mt-1.5 font-medium" style={{ color: ORANGE_DARK }}>{valeur}</p>
       )}
+    </div>
+  );
+}
+
+function ChampEglise({ label, valeur, onChange, options = [] }) {
+  const listId = "eglises-maison-list";
+
+  return (
+    <div className="block">
+      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
+      <input
+        type="text"
+        value={valeur}
+        list={listId}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Ex. : Joseph"
+        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
+        style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM }}
+      />
+      <datalist id={listId}>
+        {options.map((nom) => (
+          <option key={nom} value={nom} />
+        ))}
+      </datalist>
+      {options.length > 0 && (
+        <select
+          value={options.includes(valeur) ? valeur : ""}
+          onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
+          className="mt-1.5 w-full rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
+          style={{ border: "1px solid #E8D5B8", backgroundColor: "white", color: "#8A7358" }}
+        >
+          <option value="">Choisir dans la liste ({options.length})</option>
+          {options.map((nom) => (
+            <option key={nom} value={nom}>{nom}</option>
+          ))}
+        </select>
+      )}
+      <p className="text-xs mt-1" style={{ color: "#8A7358" }}>
+        Votre choix est mémorisé pour vos prochaines connexions.
+      </p>
     </div>
   );
 }
