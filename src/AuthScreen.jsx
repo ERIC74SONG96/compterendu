@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Flame, Loader2, Mail, Lock, User, CheckCircle2, XCircle, Info } from "lucide-react";
-import { signIn, signUp } from "./auth";
+import { signIn, signUp, renvoyerConfirmationEmail } from "./auth";
 
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
@@ -17,6 +17,7 @@ export default function AuthScreen({ onMessage }) {
   const [chargement, setChargement] = useState(false);
   const [attenteConfirmation, setAttenteConfirmation] = useState(null);
   const [alerte, setAlerte] = useState(null);
+  const [renvoiEnCours, setRenvoiEnCours] = useState(false);
 
   const afficherAlerte = (texte, ok = true) => {
     setAlerte({ texte, ok });
@@ -74,6 +75,19 @@ export default function AuthScreen({ onMessage }) {
     setChargement(false);
   };
 
+  const renvoyerEmail = async () => {
+    if (!attenteConfirmation) return;
+    setRenvoiEnCours(true);
+    try {
+      const { error } = await renvoyerConfirmationEmail(attenteConfirmation);
+      if (error) throw error;
+      afficherAlerte("Nouvel e-mail de confirmation envoyé. Vérifiez votre boîte mail.");
+    } catch (err) {
+      afficherAlerte(err.message || "Impossible de renvoyer l'e-mail.", false);
+    }
+    setRenvoiEnCours(false);
+  };
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: CREAM, color: INK, fontFamily: "Georgia, serif" }}>
       <div style={{ height: 6, backgroundColor: "#E6E6E6" }} />
@@ -123,16 +137,28 @@ export default function AuthScreen({ onMessage }) {
                 <p className="text-sm mt-1.5 leading-relaxed" style={{ color: "#2E5A7A" }}>
                   Un message a été envoyé à{" "}
                   <strong className="break-all">{attenteConfirmation}</strong>.
-                  Ouvrez votre boîte mail (vérifiez aussi les <strong>spams</strong>), cliquez sur le lien de confirmation, puis revenez ici pour vous connecter.
+                  Ouvrez votre boîte mail (vérifiez aussi les <strong>spams</strong>), cliquez sur le lien de confirmation — vous serez redirigé vers{" "}
+                  <strong>compterendu.vercel.app</strong>, puis connectez-vous.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setAttenteConfirmation(null)}
-                  className="mt-2 text-xs font-semibold underline"
-                  style={{ color: "#2E6DA4" }}
-                >
-                  Masquer ce message
-                </button>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={renvoyerEmail}
+                    disabled={renvoiEnCours}
+                    className="text-xs font-semibold underline disabled:opacity-60"
+                    style={{ color: "#2E6DA4" }}
+                  >
+                    {renvoiEnCours ? "Envoi…" : "Renvoyer l'e-mail de confirmation"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttenteConfirmation(null)}
+                    className="text-xs font-semibold underline"
+                    style={{ color: "#2E6DA4" }}
+                  >
+                    Masquer ce message
+                  </button>
+                </div>
               </div>
             </div>
           )}

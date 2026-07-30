@@ -123,9 +123,16 @@ export default function CompteRenduApp() {
       setAuthLoading(false);
       return;
     }
-    const { data: { subscription } } = onAuthStateChange((s) => {
+    const { data: { subscription } } = onAuthStateChange((s, event) => {
       setSession(s);
       setAuthLoading(false);
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      const retourConfirmation = hash.includes("access_token") || search.includes("code=") || search.includes("type=signup");
+      if (s?.user && retourConfirmation && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        notifier("E-mail confirmé — bienvenue !");
+        window.history.replaceState(null, "", window.location.pathname);
+      }
       if (s?.user && !editId) {
         const meta = s.user.user_metadata || {};
         setForm((f) => ({

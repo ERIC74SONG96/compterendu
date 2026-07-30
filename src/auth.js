@@ -1,8 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "./supabase-config";
 
+/** URL de retour après confirmation e-mail (doit être autorisée dans Supabase Auth). */
+export function getAuthRedirectUrl() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return import.meta.env.VITE_APP_URL || "https://compterendu.vercel.app";
+}
+
 export const supabase = SUPABASE_URL && SUPABASE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  })
   : null;
 
 export function isConfigured() {
@@ -11,7 +24,7 @@ export function isConfigured() {
 
 export function onAuthStateChange(callback) {
   if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } };
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return supabase.auth.onAuthStateChange((event, session) => callback(session, event));
 }
 
 export async function signUp(email, password, chefName) {
@@ -19,7 +32,19 @@ export async function signUp(email, password, chefName) {
   return supabase.auth.signUp({
     email,
     password,
-    options: { data: { chef_name: chefName.trim() } },
+    options: {
+      data: { chef_name: chefName.trim() },
+      emailRedirectTo: getAuthRedirectUrl(),
+    },
+  });
+}
+
+export async function renvoyerConfirmationEmail(email) {
+  if (!supabase) throw new Error("SUPABASE_NON_CONFIGURE");
+  return supabase.auth.resend({
+    type: "signup",
+    email: email.trim(),
+    options: { emailRedirectTo: getAuthRedirectUrl() },
   });
 }
 
