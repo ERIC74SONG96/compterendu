@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
-  Target, HandHeart, AlertCircle, LogOut, Calendar
+  Target, HandHeart, AlertCircle, LogOut, Calendar, ChevronLeft, ChevronRight
 } from "lucide-react";
 import AuthScreen from "./AuthScreen";
 import { isConfigured, onAuthStateChange, signOut } from "./auth";
@@ -705,18 +705,9 @@ function StatMini({ icone: Icone, valeur, label }) {
   );
 }
 
-function lundiDe(date) {
-  const d = new Date(date);
-  const jour = d.getDay();
-  const diff = jour === 0 ? -6 : 1 - jour;
-  d.setDate(d.getDate() + diff);
-  d.setHours(12, 0, 0, 0);
-  return d;
-}
-
-function formatSemaine(isoDate) {
-  if (!isoDate) return "";
-  const debut = lundiDe(new Date(`${isoDate}T12:00:00`));
+function formatSemaine(isoLundi) {
+  if (!isoLundi) return "";
+  const debut = new Date(`${isoLundi}T12:00:00`);
   const fin = new Date(debut);
   fin.setDate(debut.getDate() + 6);
   const fmt = (d) =>
@@ -725,42 +716,112 @@ function formatSemaine(isoDate) {
 }
 
 function isoDuLundi(date = new Date()) {
-  return lundiDe(date).toISOString().slice(0, 10);
+  const d = new Date(date);
+  const jour = d.getDay();
+  const diff = jour === 0 ? -6 : 1 - jour;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function isoSemaineDepuisLundi(isoLundi) {
+  const d = new Date(`${isoLundi}T12:00:00`);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const semaine1 = new Date(d.getFullYear(), 0, 4);
+  const num = 1 + Math.round(
+    ((d - semaine1) / 86400000 - 3 + ((semaine1.getDay() + 6) % 7)) / 7
+  );
+  return `${d.getFullYear()}-W${String(num).padStart(2, "0")}`;
+}
+
+function lundiDepuisIsoSemaine(isoSemaine) {
+  const [annee, sem] = isoSemaine.split("-W");
+  const y = Number(annee);
+  const w = Number(sem);
+  const simple = new Date(y, 0, 1 + (w - 1) * 7);
+  const jour = simple.getDay();
+  if (jour <= 4) simple.setDate(simple.getDate() - simple.getDay() + 1);
+  else simple.setDate(simple.getDate() + 8 - simple.getDay());
+  return simple.toISOString().slice(0, 10);
+}
+
+function dimancheDe(isoLundi) {
+  const d = new Date(`${isoLundi}T12:00:00`);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+function fmtJourComplet(d) {
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long", day: "numeric", month: "long",
+  });
 }
 
 function ChampSemaine({ label, valeur, onChange }) {
-  const [datePick, setDatePick] = useState(() => (valeur ? "" : isoDuLundi()));
+  const [lundi, setLundi] = useState(() => isoDuLundi());
 
   useEffect(() => {
-    if (!valeur) onChange(formatSemaine(isoDuLundi()));
+    if (!valeur) onChange(formatSemaine(lundi));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const choisirDate = (iso) => {
-    setDatePick(iso);
-    if (iso) onChange(formatSemaine(iso));
+  const appliquer = (isoLundi) => {
+    setLundi(isoLundi);
+    onChange(formatSemaine(isoLundi));
   };
 
+  const decalerSemaine = (delta) => {
+    const d = new Date(`${lundi}T12:00:00`);
+    d.setDate(d.getDate() + delta * 7);
+    appliquer(d.toISOString().slice(0, 10));
+  };
+
+  const debut = new Date(`${lundi}T12:00:00`);
+  const fin = dimancheDe(lundi);
+
   return (
-    <label className="block">
+    <div className="block">
       <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
-      {valeur && (
-        <p className="text-sm mt-1 font-semibold" style={{ color: INK }}>{valeur}</p>
-      )}
-      <div className="relative mt-1">
-        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#A08A6B" }} />
-        <input
-          type="date"
-          value={datePick}
-          onChange={(e) => choisirDate(e.target.value)}
-          placeholder=""
-          className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none cursor-pointer"
-          style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM, color: INK }}
-        />
+      <p className="text-xs mt-0.5 mb-2" style={{ color: "#8A7358" }}>Semaine de 7 jours · lundi au dimanche</p>
+
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM }}>
+        <div className="flex items-center gap-1 p-1">
+          <button type="button" onClick={() => decalerSemaine(-1)} aria-label="Semaine précédente"
+            className="p-2 rounded-md shrink-0 hover:bg-white/80" style={{ color: ORANGE_DARK }}>
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <label className="flex-1 relative cursor-pointer">
+            <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#A08A6B" }} />
+            <input
+              type="week"
+              value={isoSemaineDepuisLundi(lundi)}
+              onChange={(e) => { if (e.target.value) appliquer(lundiDepuisIsoSemaine(e.target.value)); }}
+              className="w-full rounded-md pl-8 pr-2 py-2 text-sm font-semibold text-center outline-none cursor-pointer bg-transparent"
+              style={{ color: INK, fontFamily: "system-ui, sans-serif" }}
+            />
+          </label>
+
+          <button type="button" onClick={() => decalerSemaine(1)} aria-label="Semaine suivante"
+            className="p-2 rounded-md shrink-0 hover:bg-white/80" style={{ color: ORANGE_DARK }}>
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-3 py-2.5 space-y-1 text-sm" style={{ backgroundColor: "white", borderTop: "1px solid #E8D5B8", fontFamily: "system-ui, sans-serif" }}>
+          <p style={{ color: INK }}>
+            <span className="font-bold" style={{ color: ORANGE_DARK }}>Lundi</span>
+            {" "}{fmtJourComplet(debut)}
+          </p>
+          <p style={{ color: INK }}>
+            <span className="font-bold" style={{ color: ORANGE_DARK }}>Dimanche</span>
+            {" "}{fmtJourComplet(fin)}
+          </p>
+        </div>
       </div>
-      <p className="text-xs mt-1" style={{ color: "#8A7358" }}>
-        {valeur ? "Choisissez une date pour changer la semaine" : "Choisissez un jour — la semaine lun.–dim. s'affiche"}
-      </p>
-    </label>
+
+      {valeur && (
+        <p className="text-xs mt-1.5 font-medium" style={{ color: ORANGE_DARK }}>{valeur}</p>
+      )}
+    </div>
   );
 }
 
