@@ -1,0 +1,14 @@
+---
+description: Pousser systematiquement les changements sur GitHub apres chaque modification de code
+alwaysApply: true
+---
+
+# Toujours push sur GitHub
+
+Apres toute modification de code dans ce projet :
+
+1. Verifier `git status` et `git diff`
+2. Committer avec un message clair en francais
+3. Pousser sur `origin main` sans attendre que l'utilisateur le demande
+
+Ne pas committer `.env` ni de secrets. L'utilisateur veut que Vercel redeploie automatiquement via GitHub.
