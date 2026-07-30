@@ -7,7 +7,7 @@ export async function loadProfil() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, chef_name, eglise_maison, email")
+    .select("id, role, chef_name, eglise_maison, email, super_admin")
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -28,7 +28,7 @@ export async function loadAllProfils() {
 }
 
 export function isAdmin(profil) {
-  return profil?.role === "admin";
+  return profil?.role === "admin" || profil?.super_admin === true;
 }
 
 export function isChefChambre(profil) {
@@ -46,9 +46,11 @@ export function getEgliseMaison(profil, session) {
 }
 
 export function libelleRole(profil) {
-  if (isAdmin(profil)) return "Administrateur";
-  if (isChefChambre(profil)) return "Chef de chambre";
-  return "Chef d'équipe";
+  const parts = [];
+  if (isAdmin(profil)) parts.push("Grand administrateur");
+  if (isChefChambre(profil)) parts.push("Chef de chambre");
+  if (!parts.length) parts.push("Chef d'équipe");
+  return parts.join(" · ");
 }
 
 /**

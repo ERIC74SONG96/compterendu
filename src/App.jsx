@@ -176,7 +176,7 @@ export default function CompteRenduApp() {
     try {
       const p = await loadProfil();
       setProfil(p);
-      if (p?.role === "admin") {
+      if (isAdmin(p)) {
         setProfils(await loadAllProfils());
       } else {
         setProfils([]);
@@ -431,7 +431,7 @@ export default function CompteRenduApp() {
             { id: "dashboard", icone: Users, label: chefChambre
               ? `Ma chambre (${rapportsEquipe.length})`
               : `Mon équipe (${rapportsEquipe.length})` },
-            ...(admin ? [{ id: "admin", icone: Shield, label: "Administration" }] : []),
+            ...(admin ? [{ id: "admin", icone: Shield, label: "Grand admin" }] : []),
           ].map((t) => (
             <button
               key={t.id}
@@ -485,7 +485,7 @@ export default function CompteRenduApp() {
         </div>
       )}
 
-      <main className="max-w-3xl mx-auto px-4 py-5 pb-16">
+      <main className={`mx-auto px-4 py-5 pb-16 ${vue === "admin" ? "max-w-5xl" : "max-w-3xl"}`}>
         {vue === "form" ? (
           <FormulaireRapport
             form={form} setForm={setForm} editId={editId}
@@ -500,6 +500,7 @@ export default function CompteRenduApp() {
           <AdminPanel
             rapports={rapports}
             profils={profils}
+            eglisesList={eglises}
             chargement={chargement}
             charger={charger}
             modifier={modifier}
@@ -522,7 +523,7 @@ export default function CompteRenduApp() {
 
         <p className="mt-8 text-center text-xs" style={{ color: "#A08A6B", fontFamily: "system-ui, sans-serif" }}>
           {admin
-            ? "Connecté en tant qu'administrateur. Utilisez l'onglet Administration pour voir tous les rapports."
+            ? "Grand administrateur — onglet « Grand admin » pour voir toutes les églises de maison, chefs et membres."
             : chefChambre && egliseEquipe
               ? `Chef de la chambre « ${egliseEquipe} » — vous voyez les rapports de toutes les équipes.`
               : chefChambre
