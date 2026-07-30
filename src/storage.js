@@ -18,10 +18,11 @@ export async function saveRapport(rapport) {
   const session = await getSession();
   if (!session) throw new Error("NON_CONNECTE");
 
-  const payload = { ...rapport, user_id: session.user.id };
+  const ownerId = rapport.user_id || session.user.id;
+  const payload = { ...rapport, user_id: ownerId };
   const { error } = await supabase.from("rapports").upsert({
     id: rapport.id,
-    user_id: session.user.id,
+    user_id: ownerId,
     data: payload,
     ts: rapport.ts || Date.now(),
     updated_at: new Date().toISOString(),

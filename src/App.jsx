@@ -2,12 +2,15 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
-  Target, HandHeart, AlertCircle, LogOut, Calendar, ChevronLeft, ChevronRight
+  Target, HandHeart, AlertCircle, LogOut, Calendar, ChevronLeft, ChevronRight, Shield
 } from "lucide-react";
 import AuthScreen from "./AuthScreen";
+import AdminPanel from "./AdminPanel";
+import { ListeRapports } from "./ListeRapports";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
+import { isAdmin, loadAllProfils, loadProfil } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -104,6 +107,9 @@ export default function CompteRenduApp() {
   const [erreurStockage, setErreurStockage] = useState(false);
   const [ouverts, setOuverts] = useState({});
   const [eglises, setEglises] = useState([]);
+  const [profil, setProfil] = useState(null);
+  const [profils, setProfils] = useState([]);
+  const admin = isAdmin(profil);
 
   const notifier = (texte, ok = true) => {
     setMessage({ texte, ok });
@@ -164,9 +170,29 @@ export default function CompteRenduApp() {
 
   useEffect(() => { if (session) chargerEglises(); }, [chargerEglises, session]);
 
+  const chargerProfil = useCallback(async () => {
+    if (!session) { setProfil(null); setProfils([]); return; }
+    try {
+      const p = await loadProfil();
+      setProfil(p);
+      if (p?.role === "admin") {
+        setProfils(await loadAllProfils());
+      } else {
+        setProfils([]);
+      }
+    } catch {
+      setProfil(null);
+      setProfils([]);
+    }
+  }, [session]);
+
+  useEffect(() => { if (session) chargerProfil(); }, [chargerProfil, session]);
+
+  const rapportsEquipe = rapports.filter((r) => r.user_id === session?.user?.id);
+
   // Actualisation automatique pour voir les rapports des autres membres
   useEffect(() => {
-    if (vue !== "dashboard") return;
+    if (vue !== "dashboard" && vue !== "admin") return;
     const interval = setInterval(charger, 45000);
     return () => clearInterval(interval);
   }, [vue, charger]);
@@ -189,7 +215,7 @@ export default function CompteRenduApp() {
       eglise: egliseCanonique,
       membres: form.membres.filter((m) => m.nom.trim() !== ""),
       id,
-      user_id: session.user.id,
+      user_id: editId ? (rapports.find((r) => r.id === editId)?.user_id || session.user.id) : session.user.id,
       ts: editId ? (rapports.find((r) => r.id === editId)?.ts || Date.now()) : Date.now(),
       modifie: editId ? Date.now() : undefined,
     };
@@ -231,7 +257,7 @@ export default function CompteRenduApp() {
   };
 
   const modifier = (r) => {
-    if (r.user_id && session && r.user_id !== session.user.id) {
+    if (r.user_id && session && r.user_id !== session.user.id && !admin) {
       notifier("Vous ne pouvez modifier que vos propres rapports.", false);
       return;
     }
@@ -397,7 +423,8 @@ export default function CompteRenduApp() {
         <div className="max-w-3xl mx-auto flex" style={{ fontFamily: "system-ui, sans-serif" }}>
           {[
             { id: "form", icone: ClipboardList, label: editId ? "Modifier le rapport" : "Mon rapport" },
-            { id: "dashboard", icone: Users, label: `Tableau du groupe (${rapports.length})` },
+            { id: "dashboard", icone: Users, label: `Mon équipe (${rapportsEquipe.length})` },
+            ...(admin ? [{ id: "admin", icone: Shield, label: "Administration" }] : []),
           ].map((t) => (
             <button
               key={t.id}
@@ -462,9 +489,21 @@ export default function CompteRenduApp() {
             onAjouterEglise={handleAjouterEglise}
             annulerEdition={() => { setForm(formDepuisProfil(session.user.user_metadata)); setEditId(null); }}
           />
+        ) : vue === "admin" && admin ? (
+          <AdminPanel
+            rapports={rapports}
+            profils={profils}
+            chargement={chargement}
+            charger={charger}
+            modifier={modifier}
+            supprimer={supprimer}
+            scoreFidelite={scoreFidelite}
+            scoreMembre={scoreMembre}
+            currentUserId={session.user.id}
+          />
         ) : (
           <TableauDeBord
-            rapports={rapports} chargement={chargement} charger={charger}
+            rapports={rapportsEquipe} chargement={chargement} charger={charger}
             ouverts={ouverts} setOuverts={setOuverts}
             modifier={modifier} supprimer={supprimer}
             scoreFidelite={scoreFidelite} scoreMembre={scoreMembre}
@@ -473,7 +512,9 @@ export default function CompteRenduApp() {
         )}
 
         <p className="mt-8 text-center text-xs" style={{ color: "#A08A6B", fontFamily: "system-ui, sans-serif" }}>
-          Connecté en tant que chef d&apos;équipe. Les rapports sont visibles par tous les chefs connectés.
+          {admin
+            ? "Connecté en tant qu'administrateur. Utilisez l'onglet Administration pour voir tous les rapports."
+            : "Connecté en tant que chef d'équipe. Vous ne voyez que les rapports de votre équipe."}
         </p>
       </main>
     </div>
@@ -598,13 +639,11 @@ function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
   modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
 }) {
-  const [confirmation, setConfirmation] = useState(null);
-
   if (chargement) {
     return (
       <div className="py-16 flex flex-col items-center gap-3" style={{ color: BROWN, fontFamily: "system-ui, sans-serif" }}>
         <Loader2 className="w-7 h-7 animate-spin" style={{ color: ORANGE }} />
-        <p className="text-sm">Chargement des rapports du groupe…</p>
+        <p className="text-sm">Chargement de votre équipe…</p>
       </div>
     );
   }
@@ -615,9 +654,9 @@ function TableauDeBord({
         <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: CARD }}>
           <ClipboardList className="w-7 h-7" style={{ color: ORANGE }} />
         </div>
-        <p className="font-semibold" style={{ color: BROWN }}>Aucun rapport pour l'instant</p>
+        <p className="font-semibold" style={{ color: BROWN }}>Aucun rapport pour votre équipe</p>
         <p className="text-sm mt-1" style={{ color: "#8A7358" }}>
-          Remplissez « Mon rapport » : il apparaîtra ici pour tout le groupe.
+          Remplissez « Mon rapport » : il apparaîtra ici dans votre espace équipe.
         </p>
         <button onClick={charger} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold" style={{ color: ORANGE_DARK }}>
           <RefreshCw className="w-4 h-4" /> Actualiser
@@ -639,22 +678,9 @@ function TableauDeBord({
   const OBJECTIF = 100;
   const pourcentage = Math.min(100, Math.round((totalDisciples / OBJECTIF) * 100));
 
-  // Chefs uniques ayant rendu un rapport
-  const chefsUniques = new Set(
-    rapports.map((r) => (r.chef || "").trim().toLowerCase()).filter(Boolean)
-  ).size;
-
-  // Taux de fidélité moyen sur tous les rapports
   const totalPossibleFid = rapports.length * 4;
   const totalFid = rapports.reduce((acc, r) => acc + scoreFidelite(r.fidelite), 0);
   const tauxFidelite = totalPossibleFid ? Math.round((totalFid / totalPossibleFid) * 100) : 0;
-
-  // Groupement par semaine
-  const semaines = {};
-  rapports.forEach((r) => {
-    const s = r.semaine || "Semaine non précisée";
-    (semaines[s] = semaines[s] || []).push(r);
-  });
 
   return (
     <div className="space-y-6">
@@ -691,7 +717,7 @@ function TableauDeBord({
 
         {/* Sous-statistiques */}
         <div className="grid grid-cols-3 divide-x" style={{ borderColor: "rgba(255,255,255,0.25)", fontFamily: "system-ui, sans-serif" }}>
-          <StatMini icone={Users} valeur={chefsUniques} label={chefsUniques > 1 ? "chefs actifs" : "chef actif"} />
+          <StatMini icone={Users} valeur={totalDisciples} label={totalDisciples > 1 ? "disciples" : "disciple"} />
           <StatMini icone={ClipboardList} valeur={rapports.length} label={rapports.length > 1 ? "rapports" : "rapport"} />
           <StatMini icone={HandHeart} valeur={`${tauxFidelite}%`} label="fidélité moyenne" />
         </div>
@@ -707,161 +733,16 @@ function TableauDeBord({
       </div>
 
 
-      {Object.entries(semaines).map(([semaine, liste]) => (
-        <div key={semaine}>
-          <h2 className="text-sm font-bold uppercase tracking-wider mb-2 px-1" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-            {semaine} · {liste.length} rapport{liste.length > 1 ? "s" : ""}
-          </h2>
-          <div className="space-y-3">
-            {liste.map((r) => {
-              const ouvert = !!ouverts[r.id];
-              const fid = scoreFidelite(r.fidelite);
-              return (
-                <article key={r.id} className="rounded-xl shadow-sm overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
-                  {/* En-tête de carte */}
-                  <button
-                    onClick={() => setOuverts((o) => ({ ...o, [r.id]: !o[r.id] }))}
-                    className="w-full px-4 py-3 flex items-center gap-3 text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0"
-                      style={{ backgroundColor: ORANGE, fontFamily: "system-ui, sans-serif" }}>
-                      {(r.chef || "?").trim().charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold leading-tight truncate">{r.chef}</p>
-                      <p className="text-xs mt-0.5 truncate" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-                        {r.eglise ? `Église de maison ${r.eglise} · ` : ""}{(r.membres || []).length} membre{(r.membres || []).length > 1 ? "s" : ""}
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0"
-                      style={{
-                        backgroundColor: fid === 4 ? "#EAF3E2" : CARD,
-                        color: fid === 4 ? "#4A7C2A" : ORANGE_DARK,
-                        fontFamily: "system-ui, sans-serif",
-                      }}>
-                      Fidélité {fid}/4
-                    </span>
-                    {ouvert ? <ChevronUp className="w-4 h-4 shrink-0" style={{ color: BROWN }} />
-                      : <ChevronDown className="w-4 h-4 shrink-0" style={{ color: BROWN }} />}
-                  </button>
-
-                  {/* Détail */}
-                  {ouvert && (
-                    <div className="px-4 pb-4 space-y-4 border-t pt-3" style={{ borderColor: "#F5E7CF" }}>
-                      {/* Fidélité */}
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                          Fidélité du chef
-                        </h3>
-                        <ul className="space-y-1">
-                          {FIDELITE.map((c) => {
-                            const v = r.fidelite ? r.fidelite[c.key] : null;
-                            const temps = c.avecTemps && v === true
-                              ? formaterTempsPriere(r.fidelite?.priere_temps)
-                              : null;
-                            return (
-                              <li key={c.key} className="flex items-start gap-2 text-sm">
-                                {v === true ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#4A7C2A" }} />
-                                  : v === false ? <XCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#B3402A" }} />
-                                  : <span className="w-4 h-4 mt-0.5 shrink-0 rounded-full border" style={{ borderColor: "#C9B394" }} />}
-                                <span style={{ color: v === false ? "#B3402A" : INK }}>
-                                  {c.label}
-                                  {temps && (
-                                    <span className="block text-xs font-semibold mt-0.5" style={{ color: ORANGE_DARK }}>
-                                      Temps de prière : {temps}
-                                    </span>
-                                  )}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-
-                      {/* Compte rendu personnel */}
-                      <AffichageComptePerso compte={r.compte_perso} />
-
-                      {/* Membres */}
-                      {(r.membres || []).length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                            Membres suivis
-                          </h3>
-                          <div className="space-y-2">
-                            {r.membres.map((m, i) => (
-                              <div key={i} className="rounded-lg px-3 py-2" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="font-semibold text-sm">{m.nom}</p>
-                                  <div className="flex items-center gap-2 text-xs" style={{ fontFamily: "system-ui, sans-serif" }}>
-                                    <span className="font-bold" style={{ color: ORANGE_DARK }}>
-                                      {scoreMembre(m)}/{ROUTINES.length} routines
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-full font-semibold"
-                                      style={{
-                                        backgroundColor: m.presence ? "#EAF3E2" : "#F9E3DC",
-                                        color: m.presence ? "#4A7C2A" : "#B3402A",
-                                      }}>
-                                      {m.presence ? "Présent" : "Absent"}
-                                    </span>
-                                  </div>
-                                </div>
-                                {scoreMembre(m) > 0 && (
-                                  <p className="text-xs mt-1 leading-relaxed" style={{ color: "#8A7358" }}>
-                                    {ROUTINES.filter((rt) => m.routines && m.routines[rt]).map((rt) => {
-                                      const temps = estRoutinePriere(rt)
-                                        ? formaterTempsPriere(m.routines_temps?.[rt])
-                                        : null;
-                                      return temps ? `${rt} (${temps})` : rt;
-                                    }).join(" · ")}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Observations */}
-                      {r.observations && (
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                            Observations et sujets de prière
-                          </h3>
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{r.observations}</p>
-                        </div>
-                      )}
-
-                      {/* Actions — uniquement ses propres rapports */}
-                      {(!r.user_id || r.user_id === currentUserId) && (
-                      <div className="flex gap-2 pt-1" style={{ fontFamily: "system-ui, sans-serif" }}>
-                        <button onClick={() => modifier(r)}
-                          className="flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
-                          style={{ border: `1.5px solid ${ORANGE}`, color: ORANGE_DARK }}>
-                          <Pencil className="w-3.5 h-3.5" /> Modifier
-                        </button>
-                        {confirmation === r.id ? (
-                          <button onClick={() => { supprimer(r.id); setConfirmation(null); }}
-                            className="flex-1 py-2 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-1.5"
-                            style={{ backgroundColor: "#B3402A" }}>
-                            <Trash2 className="w-3.5 h-3.5" /> Confirmer la suppression
-                          </button>
-                        ) : (
-                          <button onClick={() => setConfirmation(r.id)}
-                            className="py-2 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
-                            style={{ border: "1.5px solid #D9A79A", color: "#B3402A" }}>
-                            <Trash2 className="w-3.5 h-3.5" /> Supprimer
-                          </button>
-                        )}
-                      </div>
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      <ListeRapports
+        rapports={rapports}
+        ouverts={ouverts}
+        setOuverts={setOuverts}
+        modifier={modifier}
+        supprimer={supprimer}
+        scoreFidelite={scoreFidelite}
+        scoreMembre={scoreMembre}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 }

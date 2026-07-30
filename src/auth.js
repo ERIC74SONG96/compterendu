@@ -38,7 +38,17 @@ export async function updateProfil({ chefName, egliseMaison }) {
   const data = {};
   if (chefName !== undefined) data.chef_name = chefName;
   if (egliseMaison !== undefined) data.eglise_maison = egliseMaison;
-  return supabase.auth.updateUser({ data });
+  const result = await supabase.auth.updateUser({ data });
+
+  const session = await getSession();
+  if (session && (chefName !== undefined || egliseMaison !== undefined)) {
+    const patch = {};
+    if (chefName !== undefined) patch.chef_name = chefName;
+    if (egliseMaison !== undefined) patch.eglise_maison = egliseMaison;
+    await supabase.from("profiles").update(patch).eq("id", session.user.id);
+  }
+
+  return result;
 }
 
 export async function getSession() {
