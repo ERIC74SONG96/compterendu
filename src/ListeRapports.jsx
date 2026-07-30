@@ -65,10 +65,7 @@ function BlocSection({ lettre, titre, children }) {
   );
 }
 
-function AffichageComptePerso({ compte, chefNom = "" }) {
-  const titreSection = chefNom
-    ? `Compte rendu personnel du chef — ${chefNom}`
-    : "Compte rendu personnel du chef";
+function AffichageComptePerso({ compte }) {
   const cp = {
     bible_chapitres: 0,
     priere_seul: { heures: 0, minutes: 0 },
@@ -246,7 +243,7 @@ export function ListeRapports({
                         lettre="C"
                         titre={chefNom ? `Compte rendu personnel du chef — ${chefNom}` : "Compte rendu personnel du chef"}
                       >
-                        <AffichageComptePerso compte={r.compte_perso} chefNom={chefNom} />
+                        <AffichageComptePerso compte={r.compte_perso} />
                       </BlocSection>
 
                       {r.observations && (
