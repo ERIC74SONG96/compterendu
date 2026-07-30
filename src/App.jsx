@@ -717,8 +717,11 @@ function TableauDeBord({
       {!chefChambre && rapports.some((r) => (r.membres || []).some((m) => m.nom?.trim())) && (
         <section className="rounded-xl p-4 space-y-3" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
           <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-            Mes disciples
+            Disciples de mon équipe
           </h2>
+          <p className="text-xs" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
+            Compte rendu de chaque membre suivi par le chef cette semaine.
+          </p>
           {rapports.flatMap((r) =>
             (r.membres || []).filter((m) => m.nom?.trim()).map((m) => (
               <div key={`${r.id}|${m.nom}`} className="rounded-lg px-4 py-3 flex items-center gap-3" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>

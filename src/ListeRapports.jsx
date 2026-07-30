@@ -42,7 +42,10 @@ function estRoutinePriere(routine) {
   return ROUTINES_PRIERE.has(routine);
 }
 
-function AffichageComptePerso({ compte }) {
+function AffichageComptePerso({ compte, chefNom = "" }) {
+  const titreSection = chefNom
+    ? `Compte rendu personnel — ${chefNom}`
+    : "Compte rendu personnel du chef";
   const cp = {
     bible_chapitres: 0,
     priere_seul: { heures: 0, minutes: 0 },
@@ -67,7 +70,7 @@ function AffichageComptePerso({ compte }) {
     return (
       <div>
         <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-          Compte rendu personnel du chef
+          {titreSection}
         </h3>
         <p className="text-sm italic" style={{ color: "#8A7358" }}>Non renseigné pour cette semaine.</p>
       </div>
@@ -77,7 +80,7 @@ function AffichageComptePerso({ compte }) {
   return (
     <div>
       <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-        Compte rendu personnel du chef
+        {titreSection}
       </h3>
       <ul className="space-y-1 text-sm">
         {lignes.map((l) => (
@@ -126,16 +129,13 @@ export function ListeRapports({
               const fid = scoreFidelite(r.fidelite);
               const peutEditer = canEditAll || !r.user_id || r.user_id === currentUserId;
               const nomsDisciples = (r.membres || []).map((m) => m.nom?.trim()).filter(Boolean);
-              const estMonRapport = String(r.user_id || "") === String(currentUserId || "");
-              const initiale = nomsDisciples.length
-                ? nomsDisciples[0].charAt(0).toUpperCase()
-                : (r.chef || "?").trim().charAt(0).toUpperCase();
-              const titre = nomsDisciples.length
-                ? nomsDisciples.join(", ")
-                : (r.chef || "?");
-              const sousTitre = estMonRapport
-                ? [r.semaine || null, r.chef ? `Chef ${r.chef}` : null].filter(Boolean).join(" · ") || "Mon équipe"
-                : [r.chef ? `Chef ${r.chef}` : null, r.semaine || null].filter(Boolean).join(" · ");
+              const chefNom = (r.chef || "?").trim();
+              const initiale = chefNom.charAt(0).toUpperCase();
+              const titre = chefNom;
+              const sousTitre = [
+                r.semaine || null,
+                nomsDisciples.length ? `Disciples : ${nomsDisciples.join(", ")}` : null,
+              ].filter(Boolean).join(" · ");
               return (
                 <article key={r.id} className="rounded-xl shadow-sm overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
                   <button
@@ -175,7 +175,7 @@ export function ListeRapports({
                     <div className="px-4 pb-4 space-y-4 border-t pt-3" style={{ borderColor: "#F5E7CF" }}>
                       <div>
                         <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                          Fidélité du chef
+                          Fidélité du chef — {chefNom}
                         </h3>
                         <ul className="space-y-1">
                           {FIDELITE.map((c) => {
@@ -200,12 +200,12 @@ export function ListeRapports({
                         </ul>
                       </div>
 
-                      <AffichageComptePerso compte={r.compte_perso} />
+                      <AffichageComptePerso compte={r.compte_perso} chefNom={chefNom} />
 
                       {(r.membres || []).length > 0 && (
                         <div>
                           <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                            Membres suivis
+                            Membres suivis — compte rendu de chaque disciple
                           </h3>
                           <div className="space-y-2">
                             {r.membres.map((m, i) => (
