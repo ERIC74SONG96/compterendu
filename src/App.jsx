@@ -59,12 +59,25 @@ function formaterTempsPriere(temps) {
 }
 
 const emptyMembre = () => ({ nom: "", routines: {}, routines_temps: {}, presence: false });
+
+const emptyComptePerso = () => ({
+  bible_chapitres: 0,
+  priere_seul: tempsPriereVide(),
+  priere_groupe: tempsPriereVide(),
+  veilles_matinales: 0,
+  meditations_nombre: 0,
+  meditation_temps: tempsPriereVide(),
+  livre_nom: "",
+  livre_pages: 0,
+});
+
 const emptyForm = () => ({
   chef: "", eglise: "", semaine: "",
   fidelite: {
     priere: null, priere_temps: tempsPriereVide(),
     jeune: null, rencontre: null, evangelisation: null,
   },
+  compte_perso: emptyComptePerso(),
   membres: [emptyMembre(), emptyMembre()],
   observations: "",
 });
@@ -228,6 +241,13 @@ export default function CompteRenduApp() {
         priere: null, jeune: null, rencontre: null, evangelisation: null,
         ...(r.fidelite || {}),
         priere_temps: r.fidelite?.priere_temps || tempsPriereVide(),
+      },
+      compte_perso: {
+        ...emptyComptePerso(),
+        ...(r.compte_perso || {}),
+        priere_seul: { ...tempsPriereVide(), ...(r.compte_perso?.priere_seul || {}) },
+        priere_groupe: { ...tempsPriereVide(), ...(r.compte_perso?.priere_groupe || {}) },
+        meditation_temps: { ...tempsPriereVide(), ...(r.compte_perso?.meditation_temps || {}) },
       },
       membres: (r.membres && r.membres.length ? r.membres : [emptyMembre()]).map((m) => ({
         nom: m.nom || "",
@@ -509,9 +529,21 @@ function FormulaireRapport({
         </div>
       </section>
 
-      {/* B. Membres */}
+      {/* B. Compte rendu personnel du chef */}
       <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
-        <TitreSection lettre="B" titre="Suivi des membres — routines spirituelles" />
+        <TitreSection lettre="B" titre="Mon compte rendu personnel cette semaine" />
+        <SectionComptePerso
+          compte={form.compte_perso || emptyComptePerso()}
+          onChange={(patch) => setForm((f) => ({
+            ...f,
+            compte_perso: { ...(f.compte_perso || emptyComptePerso()), ...patch },
+          }))}
+        />
+      </section>
+
+      {/* C. Membres */}
+      <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
+        <TitreSection lettre="C" titre="Suivi des membres — routines spirituelles" />
         <div className="p-3 space-y-3" style={{ backgroundColor: "white" }}>
           {form.membres.map((m, i) => (
             <CarteMembre key={i} index={i} membre={m}
@@ -526,9 +558,9 @@ function FormulaireRapport({
         </div>
       </section>
 
-      {/* C. Observations */}
+      {/* D. Observations */}
       <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
-        <TitreSection lettre="C" titre="Observations et sujets de prière" />
+        <TitreSection lettre="D" titre="Observations et sujets de prière" />
         <div className="p-3" style={{ backgroundColor: "white" }}>
           <textarea
             value={form.observations}
@@ -745,6 +777,11 @@ function TableauDeBord({
                           })}
                         </ul>
                       </div>
+
+                      {/* Compte rendu personnel */}
+                      {r.compte_perso && (
+                        <AffichageComptePerso compte={r.compte_perso} />
+                      )}
 
                       {/* Membres */}
                       {(r.membres || []).length > 0 && (
@@ -1066,6 +1103,113 @@ function TitreSection({ lettre, titre }) {
         {lettre}
       </span>
       <h2 className="text-white font-bold text-sm sm:text-base leading-tight">{titre}</h2>
+    </div>
+  );
+}
+
+function ChampNombre({ label, value, onChange, min = 0, max = 9999 }) {
+  return (
+    <label className="block" style={{ fontFamily: "system-ui, sans-serif" }}>
+      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
+      <input
+        type="number" min={min} max={max} inputMode="numeric"
+        value={value ?? 0}
+        onChange={(e) => onChange(Math.min(max, Math.max(min, parseInt(e.target.value, 10) || 0)))}
+        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
+        style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM }}
+      />
+    </label>
+  );
+}
+
+function SectionComptePerso({ compte, onChange }) {
+  const set = (key, val) => onChange({ [key]: val });
+
+  return (
+    <div className="p-4 space-y-4" style={{ backgroundColor: "white", fontFamily: "system-ui, sans-serif" }}>
+      <ChampNombre
+        label="Lecture biblique (nombre de chapitres)"
+        value={compte.bible_chapitres}
+        onChange={(v) => set("bible_chapitres", v)}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <ChampTempsPriere
+          label="Prière seul"
+          value={compte.priere_seul || tempsPriereVide()}
+          onChange={(t) => set("priere_seul", t)}
+        />
+        <ChampTempsPriere
+          label="Prière en groupe"
+          value={compte.priere_groupe || tempsPriereVide()}
+          onChange={(t) => set("priere_groupe", t)}
+        />
+      </div>
+
+      <ChampNombre
+        label="Nombre de veillées matinales"
+        value={compte.veilles_matinales}
+        onChange={(v) => set("veilles_matinales", v)}
+        max={31}
+      />
+
+      <div className="rounded-lg p-3 space-y-3" style={{ backgroundColor: CREAM, border: "1px solid #E8D5B8" }}>
+        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>Méditation</p>
+        <ChampNombre
+          label="Nombre de méditations"
+          value={compte.meditations_nombre}
+          onChange={(v) => set("meditations_nombre", v)}
+          max={99}
+        />
+        <ChampTempsPriere
+          label="Temps de méditation"
+          value={compte.meditation_temps || tempsPriereVide()}
+          onChange={(t) => set("meditation_temps", t)}
+        />
+      </div>
+
+      <div className="rounded-lg p-3 space-y-3" style={{ backgroundColor: CREAM, border: "1px solid #E8D5B8" }}>
+        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>
+          Lecture de livre chrétien
+        </p>
+        <Champ label="Nom du livre" valeur={compte.livre_nom || ""}
+          onChange={(v) => set("livre_nom", v)} placeholder="Ex. : Pursuing the Will of God" />
+        <ChampNombre
+          label="Nombre de pages lues"
+          value={compte.livre_pages}
+          onChange={(v) => set("livre_pages", v)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AffichageComptePerso({ compte }) {
+  const cp = { ...emptyComptePerso(), ...compte };
+  const lignes = [
+    cp.bible_chapitres > 0 && `Lecture biblique : ${cp.bible_chapitres} chapitre${cp.bible_chapitres > 1 ? "s" : ""}`,
+    formaterTempsPriere(cp.priere_seul) && `Prière seul : ${formaterTempsPriere(cp.priere_seul)}`,
+    formaterTempsPriere(cp.priere_groupe) && `Prière en groupe : ${formaterTempsPriere(cp.priere_groupe)}`,
+    cp.veilles_matinales > 0 && `Veillées matinales : ${cp.veilles_matinales}`,
+    cp.meditations_nombre > 0 && `Méditations : ${cp.meditations_nombre}${formaterTempsPriere(cp.meditation_temps) ? ` (${formaterTempsPriere(cp.meditation_temps)})` : ""}`,
+    (cp.livre_nom?.trim() || cp.livre_pages > 0) && `Livre chrétien : ${cp.livre_nom?.trim() || "—"}${cp.livre_pages > 0 ? ` · ${cp.livre_pages} pages` : ""}`,
+  ].filter(Boolean);
+
+  if (!lignes.length) return null;
+
+  return (
+    <div>
+      <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
+        Compte rendu personnel du chef
+      </h3>
+      <ul className="space-y-1 text-sm">
+        {lignes.map((l) => (
+          <li key={l} className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ORANGE_DARK }} />
+            <span>{l}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
