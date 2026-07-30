@@ -68,7 +68,12 @@ export default function AdminPanel({
     return [...map.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   }, [rapportsFiltres, scoreMembre]);
 
-  const chefsActifs = profils.filter((p) => p.role === "team_leader");
+  const chefsActifs = profils.filter((p) => p.role !== "admin");
+
+  const libelleRoleProfil = (role) => {
+    if (role === "chef_chambre") return "Chef de chambre";
+    return "Chef d'équipe";
+  };
 
   const stats = useMemo(() => {
     const disciplesUniques = new Set();
@@ -271,7 +276,16 @@ export default function AdminPanel({
                     {(p.chef_name || p.email || "?").trim().charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold truncate">{p.chef_name || "Sans nom"}</p>
+                    <p className="font-bold truncate flex items-center gap-2 flex-wrap">
+                      {p.chef_name || "Sans nom"}
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: p.role === "chef_chambre" ? "#2C1810" : CARD,
+                          color: p.role === "chef_chambre" ? "#FCE3C6" : ORANGE_DARK,
+                        }}>
+                        {libelleRoleProfil(p.role)}
+                      </span>
+                    </p>
                     <p className="text-xs truncate" style={{ color: "#8A7358" }}>
                       {p.eglise_maison ? `Église ${p.eglise_maison} · ` : ""}{p.email}
                     </p>

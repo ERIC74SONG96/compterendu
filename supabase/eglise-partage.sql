@@ -32,5 +32,5 @@ create policy "lecture propre eglise ou admin"
   using (
     public.is_admin()
     or auth.uid() = user_id
-    or public.same_eglise(data->>'eglise')
+    or (public.is_chef_chambre() and public.same_eglise(data->>'eglise'))
   );

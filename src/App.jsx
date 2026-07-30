@@ -10,7 +10,7 @@ import { ListeRapports } from "./ListeRapports";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
-import { isAdmin, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison } from "./profiles";
+import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -110,6 +110,7 @@ export default function CompteRenduApp() {
   const [profil, setProfil] = useState(null);
   const [profils, setProfils] = useState([]);
   const admin = isAdmin(profil);
+  const chefChambre = isChefChambre(profil);
 
   const notifier = (texte, ok = true) => {
     setMessage({ texte, ok });
@@ -404,6 +405,9 @@ export default function CompteRenduApp() {
                 </h1>
                 <p className="text-sm mt-0.5 truncate" style={{ color: "#FCE3C6", fontFamily: "system-ui, sans-serif" }}>
                   {session.user.email}
+                  {profil && (
+                    <span className="ml-2 opacity-90">· {libelleRole(profil)}</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -424,7 +428,9 @@ export default function CompteRenduApp() {
         <div className="max-w-3xl mx-auto flex" style={{ fontFamily: "system-ui, sans-serif" }}>
           {[
             { id: "form", icone: ClipboardList, label: editId ? "Modifier le rapport" : "Mon rapport" },
-            { id: "dashboard", icone: Users, label: `Mon équipe (${rapportsEquipe.length})` },
+            { id: "dashboard", icone: Users, label: chefChambre
+              ? `Ma chambre (${rapportsEquipe.length})`
+              : `Mon équipe (${rapportsEquipe.length})` },
             ...(admin ? [{ id: "admin", icone: Shield, label: "Administration" }] : []),
           ].map((t) => (
             <button
@@ -510,15 +516,18 @@ export default function CompteRenduApp() {
             scoreFidelite={scoreFidelite} scoreMembre={scoreMembre}
             currentUserId={session.user.id}
             egliseMaison={egliseEquipe}
+            chefChambre={chefChambre}
           />
         )}
 
         <p className="mt-8 text-center text-xs" style={{ color: "#A08A6B", fontFamily: "system-ui, sans-serif" }}>
           {admin
             ? "Connecté en tant qu'administrateur. Utilisez l'onglet Administration pour voir tous les rapports."
-            : egliseEquipe
-              ? `Connecté en tant que chef d'équipe. Vous voyez les rapports de l'église de maison « ${egliseEquipe} ».`
-              : "Connecté en tant que chef d'équipe. Choisissez votre église de maison dans « Mon rapport » pour voir l'équipe."}
+            : chefChambre && egliseEquipe
+              ? `Chef de la chambre « ${egliseEquipe} » — vous voyez les rapports de toutes les équipes.`
+              : chefChambre
+                ? "Chef de chambre — choisissez votre église de maison dans « Mon rapport »."
+                : "Chef d'équipe — vous voyez uniquement le rapport de votre équipe."}
         </p>
       </main>
     </div>
@@ -642,7 +651,7 @@ function FormulaireRapport({
 function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
   modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
-  egliseMaison = "",
+  egliseMaison = "", chefChambre = false,
 }) {
   if (chargement) {
     return (
@@ -659,9 +668,13 @@ function TableauDeBord({
         <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: CARD }}>
           <ClipboardList className="w-7 h-7" style={{ color: ORANGE }} />
         </div>
-        <p className="font-semibold" style={{ color: BROWN }}>Aucun rapport pour votre équipe</p>
+        <p className="font-semibold" style={{ color: BROWN }}>
+          {chefChambre ? "Aucun rapport dans la chambre" : "Aucun rapport pour votre équipe"}
+        </p>
         <p className="text-sm mt-1" style={{ color: "#8A7358" }}>
-          Remplissez « Mon rapport » : il apparaîtra ici dans votre espace équipe.
+          {chefChambre
+            ? "Les chefs d'équipe de votre chambre n'ont pas encore enregistré de rapport cette semaine."
+            : "Remplissez « Mon rapport » : il apparaîtra ici."}
         </p>
         <button onClick={charger} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold" style={{ color: ORANGE_DARK }}>
           <RefreshCw className="w-4 h-4" /> Actualiser
@@ -689,10 +702,10 @@ function TableauDeBord({
 
   return (
     <div className="space-y-6">
-      {egliseMaison && (
+      {chefChambre && egliseMaison && (
         <p className="text-sm px-1" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-          Église de maison <strong style={{ color: ORANGE_DARK }}>{egliseMaison}</strong>
-          {" "}— rapports de tous les chefs de cette chambre.
+          Chambre <strong style={{ color: ORANGE_DARK }}>{egliseMaison}</strong>
+          {" "}— vous supervisez toutes les équipes et leurs membres.
         </p>
       )}
       {/* Bandeau progression vers 100 disciples */}

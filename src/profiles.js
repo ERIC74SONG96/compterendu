@@ -30,19 +30,37 @@ export function isAdmin(profil) {
   return profil?.role === "admin";
 }
 
+export function isChefChambre(profil) {
+  return profil?.role === "chef_chambre";
+}
+
+export function isChefEquipe(profil) {
+  return !profil?.role || profil.role === "team_leader";
+}
+
 export function getEgliseMaison(profil, session) {
   return profil?.eglise_maison?.trim()
     || session?.user?.user_metadata?.eglise_maison?.trim()
     || "";
 }
 
-/** Rapports visibles par un chef : même église de maison (ou les siens si église non définie). */
+export function libelleRole(profil) {
+  if (isAdmin(profil)) return "Administrateur";
+  if (isChefChambre(profil)) return "Chef de chambre";
+  return "Chef d'équipe";
+}
+
+/**
+ * Chef de chambre → tous les rapports de sa chambre.
+ * Chef d'équipe → uniquement son propre rapport (son équipe).
+ */
 export function filtrerRapportsEquipe(rapports, profil, session) {
-  const eglise = getEgliseMaison(profil, session);
   const userId = session?.user?.id;
-  if (!eglise) {
-    return rapports.filter((r) => r.user_id === userId);
+  if (isChefChambre(profil) || isAdmin(profil)) {
+    const eglise = getEgliseMaison(profil, session);
+    if (!eglise) return rapports.filter((r) => r.user_id === userId);
+    const norm = eglise.toLowerCase();
+    return rapports.filter((r) => (r.eglise || "").trim().toLowerCase() === norm);
   }
-  const norm = eglise.toLowerCase();
-  return rapports.filter((r) => (r.eglise || "").trim().toLowerCase() === norm);
+  return rapports.filter((r) => r.user_id === userId);
 }
