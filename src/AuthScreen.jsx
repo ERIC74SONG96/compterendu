@@ -114,7 +114,7 @@ export default function AuthScreen({ onMessage }) {
           </form>
 
           <p className="text-xs text-center mt-4 leading-relaxed" style={{ color: "#8A7358" }}>
-            Chaque chef d&apos;équipe dispose de son propre compte et ne voit que les rapports de son équipe.
+            Chaque chef d&apos;équipe dispose de son propre compte et voit les rapports de son église de maison.
           </p>
         </div>
       </main>

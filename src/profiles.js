@@ -29,3 +29,20 @@ export async function loadAllProfils() {
 export function isAdmin(profil) {
   return profil?.role === "admin";
 }
+
+export function getEgliseMaison(profil, session) {
+  return profil?.eglise_maison?.trim()
+    || session?.user?.user_metadata?.eglise_maison?.trim()
+    || "";
+}
+
+/** Rapports visibles par un chef : même église de maison (ou les siens si église non définie). */
+export function filtrerRapportsEquipe(rapports, profil, session) {
+  const eglise = getEgliseMaison(profil, session);
+  const userId = session?.user?.id;
+  if (!eglise) {
+    return rapports.filter((r) => r.user_id === userId);
+  }
+  const norm = eglise.toLowerCase();
+  return rapports.filter((r) => (r.eglise || "").trim().toLowerCase() === norm);
+}

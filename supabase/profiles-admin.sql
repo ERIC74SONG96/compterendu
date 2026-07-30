@@ -85,7 +85,33 @@ create policy "mise a jour propre profil"
   using (auth.uid() = id)
   with check (auth.uid() = id and role = (select p.role from public.profiles p where p.id = auth.uid()));
 
--- RLS rapports : chef = ses rapports ; admin = tous
+-- RLS rapports : admin = tous ; chef = sa chambre (même église de maison) + ses propres rapports
+-- Voir aussi supabase/eglise-partage.sql pour les fonctions my_eglise_maison() et same_eglise()
+
+create or replace function public.my_eglise_maison()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select nullif(trim(eglise_maison), '')
+  from public.profiles
+  where id = auth.uid();
+$$;
+
+create or replace function public.same_eglise(eglise text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.my_eglise_maison() is not null
+    and eglise is not null
+    and trim(lower(eglise)) = trim(lower(public.my_eglise_maison()));
+$$;
+
 drop policy if exists "lecture authentifiee" on public.rapports;
 drop policy if exists "lecture propre ou admin" on public.rapports;
 drop policy if exists "modification propre" on public.rapports;
@@ -93,9 +119,13 @@ drop policy if exists "modification propre ou admin" on public.rapports;
 drop policy if exists "suppression propre" on public.rapports;
 drop policy if exists "suppression propre ou admin" on public.rapports;
 
-create policy "lecture propre ou admin"
+create policy "lecture propre eglise ou admin"
   on public.rapports for select to authenticated
-  using (auth.uid() = user_id or public.is_admin());
+  using (
+    public.is_admin()
+    or auth.uid() = user_id
+    or public.same_eglise(data->>'eglise')
+  );
 
 create policy "modification propre ou admin"
   on public.rapports for update to authenticated

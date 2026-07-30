@@ -10,7 +10,7 @@ import { ListeRapports } from "./ListeRapports";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
-import { isAdmin, loadAllProfils, loadProfil } from "./profiles";
+import { isAdmin, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -188,7 +188,8 @@ export default function CompteRenduApp() {
 
   useEffect(() => { if (session) chargerProfil(); }, [chargerProfil, session]);
 
-  const rapportsEquipe = rapports.filter((r) => r.user_id === session?.user?.id);
+  const rapportsEquipe = filtrerRapportsEquipe(rapports, profil, session);
+  const egliseEquipe = getEgliseMaison(profil, session);
 
   // Actualisation automatique pour voir les rapports des autres membres
   useEffect(() => {
@@ -508,13 +509,16 @@ export default function CompteRenduApp() {
             modifier={modifier} supprimer={supprimer}
             scoreFidelite={scoreFidelite} scoreMembre={scoreMembre}
             currentUserId={session.user.id}
+            egliseMaison={egliseEquipe}
           />
         )}
 
         <p className="mt-8 text-center text-xs" style={{ color: "#A08A6B", fontFamily: "system-ui, sans-serif" }}>
           {admin
             ? "Connecté en tant qu'administrateur. Utilisez l'onglet Administration pour voir tous les rapports."
-            : "Connecté en tant que chef d'équipe. Vous ne voyez que les rapports de votre équipe."}
+            : egliseEquipe
+              ? `Connecté en tant que chef d'équipe. Vous voyez les rapports de l'église de maison « ${egliseEquipe} ».`
+              : "Connecté en tant que chef d'équipe. Choisissez votre église de maison dans « Mon rapport » pour voir l'équipe."}
         </p>
       </main>
     </div>
@@ -638,6 +642,7 @@ function FormulaireRapport({
 function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
   modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
+  egliseMaison = "",
 }) {
   if (chargement) {
     return (
@@ -684,6 +689,12 @@ function TableauDeBord({
 
   return (
     <div className="space-y-6">
+      {egliseMaison && (
+        <p className="text-sm px-1" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
+          Église de maison <strong style={{ color: ORANGE_DARK }}>{egliseMaison}</strong>
+          {" "}— rapports de tous les chefs de cette chambre.
+        </p>
+      )}
       {/* Bandeau progression vers 100 disciples */}
       <section className="rounded-xl overflow-hidden shadow-sm" style={{ backgroundColor: ORANGE }}>
         <div className="px-4 pt-4 pb-3" style={{ fontFamily: "system-ui, sans-serif" }}>
