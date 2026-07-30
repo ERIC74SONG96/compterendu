@@ -125,6 +125,21 @@ export function ListeRapports({
               const ouvert = !!ouverts[r.id];
               const fid = scoreFidelite(r.fidelite);
               const peutEditer = canEditAll || !r.user_id || r.user_id === currentUserId;
+              const nomsDisciples = (r.membres || []).map((m) => m.nom?.trim()).filter(Boolean);
+              const estMonRapport = r.user_id === currentUserId;
+              const initiale = estMonRapport && nomsDisciples.length
+                ? nomsDisciples[0].charAt(0).toUpperCase()
+                : (r.chef || "?").trim().charAt(0).toUpperCase();
+              const titre = estMonRapport && nomsDisciples.length
+                ? nomsDisciples.join(", ")
+                : (r.chef || "?");
+              const sousTitre = estMonRapport
+                ? (r.semaine ? `Mon équipe · ${r.semaine}` : "Mon équipe")
+                : [
+                    r.chef ? `Chef ${r.chef}` : null,
+                    nomsDisciples.length ? `Disciples : ${nomsDisciples.join(", ")}` : "Aucun disciple",
+                    r.eglise ? r.eglise : null,
+                  ].filter(Boolean).join(" · ");
               return (
                 <article key={r.id} className="rounded-xl shadow-sm overflow-hidden" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
                   <button
@@ -134,13 +149,23 @@ export function ListeRapports({
                   >
                     <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0"
                       style={{ backgroundColor: ORANGE, fontFamily: "system-ui, sans-serif" }}>
-                      {(r.chef || "?").trim().charAt(0).toUpperCase()}
+                      {initiale}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold leading-tight truncate">{r.chef}</p>
+                      <p className="font-bold leading-tight truncate">{titre}</p>
                       <p className="text-xs mt-0.5 truncate" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-                        {r.eglise ? `Église de maison ${r.eglise} · ` : ""}{(r.membres || []).length} membre{(r.membres || []).length > 1 ? "s" : ""}
+                        {sousTitre}
                       </p>
+                      {nomsDisciples.length > 0 && !estMonRapport && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {nomsDisciples.map((nom) => (
+                            <span key={nom} className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: CREAM, color: ORANGE_DARK, border: "1px solid #F0DCBE" }}>
+                              {nom}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0"
                       style={{ backgroundColor: fid === 4 ? "#EAF3E2" : CARD, color: fid === 4 ? "#4A7C2A" : ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>

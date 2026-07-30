@@ -404,7 +404,7 @@ export default function CompteRenduApp() {
                   Compte rendu hebdomadaire
                 </h1>
                 <p className="text-sm mt-0.5 truncate" style={{ color: "#FCE3C6", fontFamily: "system-ui, sans-serif" }}>
-                  {session.user.email}
+                  {profil?.chef_name?.trim() || session.user.user_metadata?.chef_name?.trim() || session.user.email}
                   {profil && (
                     <span className="ml-2 opacity-90">· {libelleRole(profil)}</span>
                   )}
