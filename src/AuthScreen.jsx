@@ -41,11 +41,14 @@ export default function AuthScreen({ onMessage }) {
         }
       }
     } catch (err) {
-      const msg = err.message?.includes("Invalid login")
-        ? "E-mail ou mot de passe incorrect."
-        : err.message?.includes("already registered")
-          ? "Cet e-mail est déjà utilisé."
-          : err.message || "Erreur de connexion.";
+      const code = err.code || err.message || "";
+      const msg = code.includes("email_not_confirmed") || err.message?.includes("Email not confirmed")
+        ? "E-mail non confirmé. Consultez votre boîte mail (ou spam) et cliquez le lien de confirmation."
+        : err.message?.includes("Invalid login")
+          ? "E-mail ou mot de passe incorrect."
+          : err.message?.includes("already registered")
+            ? "Cet e-mail est déjà utilisé."
+            : err.message || "Erreur de connexion.";
       onMessage(msg, false);
     }
     setChargement(false);
