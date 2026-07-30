@@ -1,0 +1,12 @@
+# Configuration Auth — poussée vers le projet cloud via :
+#   npx supabase login
+#   npx supabase config push --project-ref uturszvczqxxqkdzehcj
+
+project_id = "uturszvczqxxqkdzehcj"
+
+[auth]
+site_url = "https://compterendu.vercel.app"
+additional_redirect_urls = [
+  "https://compterendu.vercel.app/**",
+  "http://localhost:5173/**",
+]
