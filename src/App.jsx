@@ -11,7 +11,7 @@ import { AffichageMembreDisciple } from "./AffichageMembre";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
-import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole } from "./profiles";
+import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole, LIBELLE_CHEF_EGLISE } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -442,7 +442,7 @@ export default function CompteRenduApp() {
           {[
             { id: "form", icone: ClipboardList, label: editId ? "Modifier le rapport" : "Mon rapport" },
             { id: "dashboard", icone: Users, label: chefChambre
-              ? `Ma chambre (${rapportsEquipe.length})`
+              ? `Mon église de maison (${rapportsEquipe.length})`
               : `Mon équipe (${rapportsEquipe.length})` },
             ...(admin ? [{ id: "admin", icone: Shield, label: "Grand admin" }] : []),
           ].map((t) => (
@@ -538,9 +538,9 @@ export default function CompteRenduApp() {
           {admin
             ? "Grand administrateur — onglet « Grand admin » pour voir toutes les églises de maison, chefs et membres."
             : chefChambre && egliseEquipe
-              ? `Chef de la chambre « ${egliseEquipe} » — vous voyez les rapports de toutes les équipes.`
+              ? `${LIBELLE_CHEF_EGLISE} « ${egliseEquipe} » — vous voyez les rapports de toutes les équipes.`
               : chefChambre
-                ? "Chef de chambre — choisissez votre église de maison dans « Mon rapport »."
+                ? `${LIBELLE_CHEF_EGLISE} — choisissez votre église de maison dans « Mon rapport ».`
                 : "Chef d'équipe — vous voyez uniquement le rapport de votre équipe."}
         </p>
       </main>
@@ -683,11 +683,11 @@ function TableauDeBord({
           <ClipboardList className="w-7 h-7" style={{ color: ORANGE }} />
         </div>
         <p className="font-semibold" style={{ color: BROWN }}>
-          {chefChambre ? "Aucun rapport dans la chambre" : "Aucun rapport pour votre équipe"}
+          {chefChambre ? "Aucun rapport dans l'église de maison" : "Aucun rapport pour votre équipe"}
         </p>
         <p className="text-sm mt-1" style={{ color: "#8A7358" }}>
           {chefChambre
-            ? "Les chefs d'équipe de votre chambre n'ont pas encore enregistré de rapport cette semaine."
+            ? "Les chefs d'équipe de votre église de maison n'ont pas encore enregistré de rapport cette semaine."
             : "Remplissez « Mon rapport » : il apparaîtra ici."}
         </p>
         <button onClick={charger} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold" style={{ color: ORANGE_DARK }}>
@@ -718,7 +718,7 @@ function TableauDeBord({
     <div className="space-y-6">
       {chefChambre && egliseMaison && (
         <p className="text-sm px-1" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-          Chambre <strong style={{ color: ORANGE_DARK }}>{egliseMaison}</strong>
+          Église de maison <strong style={{ color: ORANGE_DARK }}>{egliseMaison}</strong>
           {" "}— vous supervisez toutes les équipes et leurs membres.
         </p>
       )}

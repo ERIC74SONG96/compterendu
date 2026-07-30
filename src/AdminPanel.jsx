@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { ListeRapports } from "./ListeRapports";
 import { eglisesCorrespondent } from "./eglises";
+import { LIBELLE_CHEF_EGLISE } from "./profiles";
 
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
@@ -74,7 +75,7 @@ export default function AdminPanel({
         nom,
         email: p.email,
         eglise: p.eglise_maison || "—",
-        role: p.role === "chef_chambre" ? "Chef de chambre" : "Chef d'équipe",
+        role: p.role === "chef_chambre" ? LIBELLE_CHEF_EGLISE : "Chef d'équipe",
         profil: p,
       });
     });
@@ -405,7 +406,7 @@ export default function AdminPanel({
                       <p className="font-bold leading-tight" style={{ fontFamily: "Georgia, serif" }}>{f.nom}</p>
                       {f.chefChambre && (
                         <p className="text-xs mt-1 flex items-center gap-1" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                          <Crown className="w-3 h-3" /> Chef de chambre : {f.chefChambre.chef_name || f.chefChambre.email}
+                          <Crown className="w-3 h-3" /> {LIBELLE_CHEF_EGLISE} : {f.chefChambre.chef_name || f.chefChambre.email}
                         </p>
                       )}
                       <p className="text-xs mt-1" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
@@ -463,7 +464,7 @@ export default function AdminPanel({
               <UserCircle className="w-4 h-4" /> Chefs et sous-chefs
             </h3>
             {ficheActive.chefChambre && (
-              <ChefLigne profil={ficheActive.chefChambre} role="Chef de chambre" rapports={ficheActive.rapports} />
+              <ChefLigne profil={ficheActive.chefChambre} role={LIBELLE_CHEF_EGLISE} rapports={ficheActive.rapports} />
             )}
             {ficheActive.sousChefs.map((p) => (
               <ChefLigne key={p.id} profil={p} role="Chef d'équipe" rapports={ficheActive.rapports} />
@@ -513,7 +514,7 @@ function ChefLigne({ profil, role, rapports }) {
         <p className="text-xs truncate" style={{ color: "#8A7358" }}>{profil.email}</p>
       </div>
       <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
-        style={{ backgroundColor: role === "Chef de chambre" ? "#2C1810" : CARD, color: role === "Chef de chambre" ? "#FCE3C6" : ORANGE_DARK }}>
+        style={{ backgroundColor: role === LIBELLE_CHEF_EGLISE ? "#2C1810" : CARD, color: role === LIBELLE_CHEF_EGLISE ? "#FCE3C6" : ORANGE_DARK }}>
         {role}
       </span>
       <div className="text-right text-xs shrink-0">

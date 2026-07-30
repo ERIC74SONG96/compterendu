@@ -6,6 +6,7 @@ export function cleEglise(nom) {
   let s = nom.trim().toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   s = s.replace(/^eglise de maison d['']?/, "").replace(/^eglise de maison de /, "").trim();
+  // Tolère l'ancienne faute « chambre » vs le nom correct « cambre » (La Cambre)
   return s.replace(/\bchambre\b/g, "cambre");
 }
 

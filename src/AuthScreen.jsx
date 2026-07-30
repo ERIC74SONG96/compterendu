@@ -197,7 +197,7 @@ export default function AuthScreen({ onMessage }) {
           </form>
 
           <p className="text-xs text-center mt-4 leading-relaxed" style={{ color: "#8A7358" }}>
-            Chaque chef d&apos;équipe remplit le rapport de son équipe. Le chef de chambre voit toutes les équipes de sa chambre.
+            Chaque chef d&apos;équipe remplit le rapport de son équipe. Le chef d&apos;église de maison voit toutes les équipes de son église (ex. La Cambre).
           </p>
         </div>
       </main>
