@@ -11,7 +11,7 @@ import { AffichageMembreDisciple } from "./AffichageMembre";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
 import { ajouterEglise, loadEglises } from "./eglises";
-import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole, LIBELLE_CHEF_EGLISE } from "./profiles";
+import { isAdmin, isChefChambre, loadAllProfils, loadProfil, filtrerRapportsEquipe, getEgliseMaison, libelleRole, LIBELLE_CHEF_EGLISE, deleteUserAccount, peutGererRapport } from "./profiles";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -271,6 +271,47 @@ export default function CompteRenduApp() {
     }
   };
 
+  const supprimerMembreDuRapport = async (rapportId, nomMembre) => {
+    const rapport = rapports.find((r) => r.id === rapportId);
+    if (!rapport) return;
+    if (!peutGererRapport(rapport, profil, session, admin)) {
+      notifier("Vous ne pouvez retirer que les membres des rapports que vous supervisez.", false);
+      return;
+    }
+    const nom = nomMembre.trim();
+    if (!nom) return;
+    if (!window.confirm(`Retirer « ${nom} » de ce compte rendu ?`)) return;
+    try {
+      const donnees = {
+        ...rapport,
+        membres: (rapport.membres || []).filter((m) => m.nom?.trim() !== nom),
+        modifie: Date.now(),
+      };
+      await saveRapport(donnees);
+      notifier(`Membre « ${nom} » retiré du rapport.`);
+      await charger();
+    } catch {
+      notifier("Impossible de retirer ce membre. Réessayez.", false);
+    }
+  };
+
+  const supprimerCompte = async (userId, nom) => {
+    if (!admin) return;
+    if (userId === session?.user?.id) {
+      notifier("Vous ne pouvez pas supprimer votre propre compte.", false);
+      return;
+    }
+    if (!window.confirm(`Supprimer définitivement le compte de « ${nom} » ? Cette action est irréversible.`)) return;
+    try {
+      await deleteUserAccount(userId);
+      notifier(`Compte « ${nom} » supprimé.`);
+      await charger();
+      await chargerProfil();
+    } catch (err) {
+      notifier(err.message || "Suppression du compte impossible.", false);
+    }
+  };
+
   const modifier = (r) => {
     if (r.user_id && session && r.user_id !== session.user.id && !admin) {
       notifier("Vous ne pouvez modifier que vos propres rapports.", false);
@@ -344,7 +385,10 @@ export default function CompteRenduApp() {
     setForm((f) => (f.membres.length >= 8 ? f : { ...f, membres: [...f.membres, emptyMembre()] }));
 
   const retirerMembre = (i) =>
-    setForm((f) => ({ ...f, membres: f.membres.filter((_, j) => j !== i) }));
+    setForm((f) => {
+      const next = f.membres.filter((_, j) => j !== i);
+      return { ...f, membres: next.length ? next : [emptyMembre()] };
+    });
 
   const scoreFidelite = (fid) => FIDELITE.filter((c) => fid && fid[c.key] === true).length;
   const scoreMembre = (m) => ROUTINES.filter((r) => m.routines && m.routines[r]).length;
@@ -518,6 +562,8 @@ export default function CompteRenduApp() {
             charger={charger}
             modifier={modifier}
             supprimer={supprimer}
+            supprimerCompte={supprimerCompte}
+            supprimerMembreDuRapport={supprimerMembreDuRapport}
             scoreFidelite={scoreFidelite}
             scoreMembre={scoreMembre}
             currentUserId={session.user.id}
@@ -527,10 +573,13 @@ export default function CompteRenduApp() {
             rapports={rapportsEquipe} chargement={chargement} charger={charger}
             ouverts={ouverts} setOuverts={setOuverts}
             modifier={modifier} supprimer={supprimer}
+            supprimerMembreDuRapport={supprimerMembreDuRapport}
             scoreFidelite={scoreFidelite} scoreMembre={scoreMembre}
             currentUserId={session.user.id}
             egliseMaison={egliseEquipe}
             chefChambre={chefChambre}
+            admin={admin}
+            peutGererRapport={(r) => peutGererRapport(r, profil, session, admin)}
           />
         )}
 
@@ -604,7 +653,7 @@ function FormulaireRapport({
           {form.membres.map((m, i) => (
             <CarteMembre key={i} index={i} membre={m}
               setMembre={setMembre} toggleRoutine={toggleRoutine} setRoutineTemps={setRoutineTemps}
-              retirer={form.membres.length > 1 ? () => retirerMembre(i) : null} />
+              retirer={() => retirerMembre(i)} />
           ))}
           <button onClick={ajouterMembre}
             className="w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
@@ -664,8 +713,8 @@ function FormulaireRapport({
 // ============ Tableau de bord ============
 function TableauDeBord({
   rapports, chargement, charger, ouverts, setOuverts,
-  modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
-  egliseMaison = "", chefChambre = false,
+  modifier, supprimer, supprimerMembreDuRapport, scoreFidelite, scoreMembre, currentUserId,
+  egliseMaison = "", chefChambre = false, admin = false, peutGererRapport = null,
 }) {
   if (chargement) {
     return (
@@ -731,9 +780,17 @@ function TableauDeBord({
             Compte rendu de chaque membre suivi par le chef cette semaine.
           </p>
           {rapports.flatMap((r) =>
-            (r.membres || []).filter((m) => m.nom?.trim()).map((m) => (
-              <AffichageMembreDisciple key={`${r.id}|${m.nom}`} membre={m} scoreTotal={ROUTINES.length} />
-            ))
+            (r.membres || []).filter((m) => m.nom?.trim()).map((m) => {
+              const peutRetirer = peutGererRapport ? peutGererRapport(r) : r.user_id === currentUserId;
+              return (
+                <AffichageMembreDisciple
+                  key={`${r.id}|${m.nom}`}
+                  membre={m}
+                  scoreTotal={ROUTINES.length}
+                  onSupprimer={peutRetirer ? () => supprimerMembreDuRapport(r.id, m.nom) : null}
+                />
+              );
+            })
           )}
         </section>
       )}
@@ -793,9 +850,11 @@ function TableauDeBord({
         setOuverts={setOuverts}
         modifier={modifier}
         supprimer={supprimer}
+        supprimerMembreDuRapport={supprimerMembreDuRapport}
         scoreFidelite={scoreFidelite}
         scoreMembre={scoreMembre}
         currentUserId={currentUserId}
+        peutEditerRapport={peutGererRapport}
       />
     </div>
   );

@@ -20,11 +20,17 @@ export async function loadAllProfils() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, role, chef_name, eglise_maison, email, created_at")
+    .select("id, role, chef_name, eglise_maison, email, created_at, super_admin")
     .order("chef_name");
 
   if (error) throw error;
   return data || [];
+}
+
+export async function deleteUserAccount(userId) {
+  if (!supabase) throw new Error("SUPABASE_NON_CONFIGURE");
+  const { error } = await supabase.rpc("admin_delete_user", { target_id: userId });
+  if (error) throw error;
 }
 
 export function isAdmin(profil) {
@@ -68,4 +74,17 @@ export function filtrerRapportsEquipe(rapports, profil, session) {
     return rapports.filter((r) => eglisesCorrespondent(r.eglise, eglise));
   }
   return rapports.filter((r) => r.user_id === userId);
+}
+
+/** Chef d'équipe → son rapport ; chef d'église → toute son église ; grand admin → tout. */
+export function peutGererRapport(rapport, profil, session, admin = false) {
+  if (admin) return true;
+  const userId = session?.user?.id;
+  if (!userId || !rapport) return false;
+  if (rapport.user_id === userId) return true;
+  if (isChefChambre(profil)) {
+    const eglise = getEgliseMaison(profil, session);
+    return !!eglise && eglisesCorrespondent(rapport.eglise, eglise);
+  }
+  return false;
 }

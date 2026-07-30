@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Shield, Users, ClipboardList, Target, RefreshCw, UserCircle,
-  Search, ChevronRight, ArrowLeft, Church, Crown, User,
+  Search, ChevronRight, ArrowLeft, Church, Crown, User, Trash2,
 } from "lucide-react";
 import { ListeRapports } from "./ListeRapports";
 import { eglisesCorrespondent } from "./eglises";
@@ -25,7 +25,8 @@ function texteCorrespond(query, ...valeurs) {
 
 export default function AdminPanel({
   rapports, profils, eglisesList, chargement, charger,
-  modifier, supprimer, scoreFidelite, scoreMembre, currentUserId,
+  modifier, supprimer, supprimerCompte, supprimerMembreDuRapport,
+  scoreFidelite, scoreMembre, currentUserId,
 }) {
   const [vue, setVue] = useState("accueil");
   const [egliseActive, setEgliseActive] = useState(null);
@@ -33,6 +34,8 @@ export default function AdminPanel({
   const [ouverts, setOuverts] = useState({});
   const [listeMembresOuverte, setListeMembresOuverte] = useState(true);
   const [listeChefsOuverte, setListeChefsOuverte] = useState(true);
+  const [listeComptesOuverte, setListeComptesOuverte] = useState(true);
+  const [compteASupprimer, setCompteASupprimer] = useState(null);
 
   const registreMembres = useMemo(() => {
     const map = new Map();
@@ -474,6 +477,74 @@ export default function AdminPanel({
       </section>
 
       {vue === "accueil" && (
+        <section className="rounded-xl p-4" style={{ backgroundColor: "white", border: "1px solid #F0DCBE" }}>
+          <button
+            type="button"
+            onClick={() => setListeComptesOuverte((o) => !o)}
+            className="w-full flex items-center justify-between text-left"
+            style={{ fontFamily: "system-ui, sans-serif" }}
+          >
+            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: ORANGE_DARK }}>
+              <Trash2 className="w-3.5 h-3.5" /> Gestion des comptes ({profils.filter((p) => p.role !== "admin").length})
+            </span>
+            <ChevronRight className={`w-4 h-4 transition-transform ${listeComptesOuverte ? "rotate-90" : ""}`} style={{ color: "#A08A6B" }} />
+          </button>
+          <p className="text-xs mt-2 leading-relaxed" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
+            En tant que grand administrateur, vous pouvez supprimer un compte chef d&apos;équipe ou chef d&apos;église de maison.
+          </p>
+          {listeComptesOuverte && (
+            <div className="mt-3 space-y-2 max-h-72 overflow-y-auto">
+              {profils.filter((p) => p.role !== "admin").map((p) => (
+                <article
+                  key={p.id}
+                  className="rounded-lg px-3 py-2.5 flex items-center gap-3"
+                  style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE", fontFamily: "system-ui, sans-serif" }}
+                >
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shrink-0 text-sm" style={{ backgroundColor: ORANGE }}>
+                    {(p.chef_name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{p.chef_name || "Sans nom"}</p>
+                    <p className="text-xs truncate" style={{ color: "#8A7358" }}>{p.email}</p>
+                    <p className="text-xs truncate" style={{ color: "#8A7358" }}>{p.eglise_maison || "—"}</p>
+                  </div>
+                  {p.id === currentUserId ? (
+                    <span className="text-xs font-semibold shrink-0" style={{ color: "#8A7358" }}>Vous</span>
+                  ) : compteASupprimer === p.id ? (
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await supprimerCompte(p.id, p.chef_name || p.email);
+                          setCompteASupprimer(null);
+                        }}
+                        className="text-xs font-bold px-2 py-1 rounded-lg text-white"
+                        style={{ backgroundColor: "#B3402A" }}
+                      >
+                        Confirmer
+                      </button>
+                      <button type="button" onClick={() => setCompteASupprimer(null)} className="text-xs underline" style={{ color: "#8A7358" }}>
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCompteASupprimer(p.id)}
+                      className="text-xs font-semibold px-2 py-1 rounded-lg flex items-center gap-1 shrink-0"
+                      style={{ backgroundColor: "#F9E3DC", color: "#B3402A", border: "1px solid #E8B4A8" }}
+                    >
+                      <Trash2 className="w-3 h-3" /> Supprimer
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {vue === "accueil" && (
         <>
           <section className="rounded-xl overflow-hidden" style={{ backgroundColor: ORANGE }}>
             <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ fontFamily: "system-ui, sans-serif" }}>
@@ -574,10 +645,12 @@ export default function AdminPanel({
               <UserCircle className="w-4 h-4" /> Chefs et sous-chefs
             </h3>
             {ficheActive.chefChambre && (
-              <ChefLigne profil={ficheActive.chefChambre} role={LIBELLE_CHEF_EGLISE} rapports={ficheActive.rapports} />
+              <ChefLigne profil={ficheActive.chefChambre} role={LIBELLE_CHEF_EGLISE} rapports={ficheActive.rapports}
+                onSupprimer={supprimerCompte} currentUserId={currentUserId} />
             )}
             {ficheActive.sousChefs.map((p) => (
-              <ChefLigne key={p.id} profil={p} role="Chef d'équipe" rapports={ficheActive.rapports} />
+              <ChefLigne key={p.id} profil={p} role="Chef d'équipe" rapports={ficheActive.rapports}
+                onSupprimer={supprimerCompte} currentUserId={currentUserId} />
             ))}
             {!ficheActive.chefChambre && ficheActive.sousChefs.length === 0 && (
               <p className="text-sm" style={{ color: "#8A7358" }}>Aucun chef inscrit pour cette église.</p>
@@ -595,6 +668,7 @@ export default function AdminPanel({
               setOuverts={setOuverts}
               modifier={modifier}
               supprimer={supprimer}
+              supprimerMembreDuRapport={supprimerMembreDuRapport}
               scoreFidelite={scoreFidelite}
               scoreMembre={scoreMembre}
               currentUserId={currentUserId}
@@ -608,12 +682,13 @@ export default function AdminPanel({
   );
 }
 
-function ChefLigne({ profil, role, rapports }) {
+function ChefLigne({ profil, role, rapports, onSupprimer, currentUserId }) {
   const nbRapports = rapports.filter((r) => r.user_id === profil.id).length;
   const nbMembres = new Set();
   rapports.filter((r) => r.user_id === profil.id).forEach((r) => {
     (r.membres || []).forEach((m) => { if (m.nom?.trim()) nbMembres.add(m.nom.trim()); });
   });
+  const [confirm, setConfirm] = useState(false);
   return (
     <article className="rounded-lg px-3 py-2.5 flex items-center gap-3" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE", fontFamily: "system-ui, sans-serif" }}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shrink-0 text-sm" style={{ backgroundColor: ORANGE }}>
@@ -631,6 +706,21 @@ function ChefLigne({ profil, role, rapports }) {
         <p className="font-bold" style={{ color: ORANGE_DARK }}>{nbRapports} rapp.</p>
         <p style={{ color: "#8A7358" }}>{nbMembres.size} memb.</p>
       </div>
+      {onSupprimer && profil.id !== currentUserId && (
+        confirm ? (
+          <div className="flex flex-col gap-1 shrink-0">
+            <button type="button" onClick={() => { onSupprimer(profil.id, profil.chef_name || profil.email); setConfirm(false); }}
+              className="text-xs font-bold px-2 py-1 rounded text-white" style={{ backgroundColor: "#B3402A" }}>
+              Confirmer
+            </button>
+            <button type="button" onClick={() => setConfirm(false)} className="text-xs underline" style={{ color: "#8A7358" }}>Annuler</button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setConfirm(true)} className="p-1.5 rounded-md shrink-0" style={{ color: "#B3402A" }} aria-label="Supprimer le compte">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )
+      )}
     </article>
   );
 }

@@ -104,8 +104,8 @@ function AffichageComptePerso({ compte }) {
 }
 
 export function ListeRapports({
-  rapports, ouverts, setOuverts, modifier, supprimer,
-  scoreFidelite, scoreMembre, currentUserId, canEditAll = false,
+  rapports, ouverts, setOuverts, modifier, supprimer, supprimerMembreDuRapport,
+  scoreFidelite, scoreMembre, currentUserId, canEditAll = false, peutEditerRapport = null,
   messageVide = "Aucun rapport.",
 }) {
   const [confirmation, setConfirmation] = useState(null);
@@ -136,7 +136,9 @@ export function ListeRapports({
             {liste.map((r) => {
               const ouvert = !!ouverts[r.id];
               const fid = scoreFidelite(r.fidelite);
-              const peutEditer = canEditAll || !r.user_id || r.user_id === currentUserId;
+              const peutEditer = peutEditerRapport
+                ? peutEditerRapport(r)
+                : (canEditAll || !r.user_id || r.user_id === currentUserId);
               const nomsDisciples = (r.membres || []).map((m) => m.nom?.trim()).filter(Boolean);
               const chefNom = (r.chef || "?").trim();
               const initiale = chefNom.charAt(0).toUpperCase();
@@ -212,7 +214,16 @@ export function ListeRapports({
                         <BlocSection lettre="B" titre="Membres suivis — compte rendu de chaque disciple">
                           <div className="space-y-4">
                             {r.membres.filter((m) => m.nom?.trim()).map((m, i) => (
-                              <AffichageMembreDisciple key={i} membre={m} scoreTotal={ROUTINES.length} />
+                              <AffichageMembreDisciple
+                                key={i}
+                                membre={m}
+                                scoreTotal={ROUTINES.length}
+                                onSupprimer={
+                                  supprimerMembreDuRapport && peutEditer
+                                    ? () => supprimerMembreDuRapport(r.id, m.nom)
+                                    : null
+                                }
+                              />
                             ))}
                           </div>
                         </BlocSection>

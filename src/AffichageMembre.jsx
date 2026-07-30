@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, XCircle, User } from "lucide-react";
+import { CheckCircle2, XCircle, User, Trash2 } from "lucide-react";
 
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
@@ -70,7 +70,7 @@ function LigneRoutine({ label, faite, temps }) {
   );
 }
 
-export function AffichageMembreDisciple({ membre, scoreTotal = 12 }) {
+export function AffichageMembreDisciple({ membre, scoreTotal = 12, onSupprimer = null }) {
   if (!membre?.nom?.trim()) return null;
 
   const nom = membre.nom.trim();
@@ -90,6 +90,17 @@ export function AffichageMembreDisciple({ membre, scoreTotal = 12 }) {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0" style={{ fontFamily: "system-ui, sans-serif" }}>
+          {onSupprimer && (
+            <button
+              type="button"
+              onClick={() => onSupprimer(nom)}
+              className="text-xs font-semibold px-2 py-1 rounded-lg flex items-center gap-1"
+              style={{ backgroundColor: "#F9E3DC", color: "#B3402A", border: "1px solid #E8B4A8" }}
+              title="Retirer ce membre du rapport"
+            >
+              <Trash2 className="w-3 h-3" /> Retirer
+            </button>
+          )}
           <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ backgroundColor: CARD, color: ORANGE_DARK }}>
             {score}/{scoreTotal} routines
           </span>
