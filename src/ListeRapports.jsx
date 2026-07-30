@@ -42,9 +42,32 @@ function estRoutinePriere(routine) {
   return ROUTINES_PRIERE.has(routine);
 }
 
+function EnteteSectionRapport({ lettre, titre }) {
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-t-lg" style={{ backgroundColor: CARD, borderBottom: "1px solid #F0DCBE" }}>
+      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+        style={{ backgroundColor: ORANGE, fontFamily: "system-ui, sans-serif" }}>
+        {lettre}
+      </span>
+      <h3 className="text-xs font-bold uppercase tracking-wider leading-snug" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
+        {titre}
+      </h3>
+    </div>
+  );
+}
+
+function BlocSection({ lettre, titre, children }) {
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #F0DCBE" }}>
+      <EnteteSectionRapport lettre={lettre} titre={titre} />
+      <div className="p-3" style={{ backgroundColor: "white" }}>{children}</div>
+    </div>
+  );
+}
+
 function AffichageComptePerso({ compte, chefNom = "" }) {
   const titreSection = chefNom
-    ? `Compte rendu personnel — ${chefNom}`
+    ? `Compte rendu personnel du chef — ${chefNom}`
     : "Compte rendu personnel du chef";
   const cp = {
     bible_chapitres: 0,
@@ -67,30 +90,18 @@ function AffichageComptePerso({ compte, chefNom = "" }) {
   ].filter(Boolean);
 
   if (!lignes.length) {
-    return (
-      <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-          {titreSection}
-        </h3>
-        <p className="text-sm italic" style={{ color: "#8A7358" }}>Non renseigné pour cette semaine.</p>
-      </div>
-    );
+    return <p className="text-sm italic" style={{ color: "#8A7358" }}>Non renseigné pour cette semaine.</p>;
   }
 
   return (
-    <div>
-      <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-        {titreSection}
-      </h3>
-      <ul className="space-y-1 text-sm">
-        {lignes.map((l) => (
-          <li key={l} className="flex items-start gap-2">
-            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ORANGE_DARK }} />
-            <span>{l}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="space-y-1 text-sm">
+      {lignes.map((l) => (
+        <li key={l} className="flex items-start gap-2">
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ORANGE_DARK }} />
+          <span>{l}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -173,10 +184,8 @@ export function ListeRapports({
 
                   {ouvert && (
                     <div className="px-4 pb-4 space-y-4 border-t pt-3" style={{ borderColor: "#F5E7CF" }}>
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                          Fidélité du chef — {chefNom}
-                        </h3>
+                      {/* A — Fidélité du chef */}
+                      <BlocSection lettre="A" titre={`Fidélité du chef — ${chefNom}`}>
                         <ul className="space-y-1">
                           {FIDELITE.map((c) => {
                             const v = r.fidelite ? r.fidelite[c.key] : null;
@@ -198,15 +207,11 @@ export function ListeRapports({
                             );
                           })}
                         </ul>
-                      </div>
+                      </BlocSection>
 
-                      <AffichageComptePerso compte={r.compte_perso} chefNom={chefNom} />
-
+                      {/* B — Membres suivis (disciples) */}
                       {(r.membres || []).length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                            Membres suivis — compte rendu de chaque disciple
-                          </h3>
+                        <BlocSection lettre="B" titre="Membres suivis — compte rendu de chaque disciple">
                           <div className="space-y-2">
                             {r.membres.map((m, i) => (
                               <div key={i} className="rounded-lg px-3 py-2" style={{ backgroundColor: CREAM, border: "1px solid #F0DCBE" }}>
@@ -233,16 +238,21 @@ export function ListeRapports({
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </BlocSection>
                       )}
 
+                      {/* C — Compte rendu personnel du chef */}
+                      <BlocSection
+                        lettre="C"
+                        titre={chefNom ? `Compte rendu personnel du chef — ${chefNom}` : "Compte rendu personnel du chef"}
+                      >
+                        <AffichageComptePerso compte={r.compte_perso} chefNom={chefNom} />
+                      </BlocSection>
+
                       {r.observations && (
-                        <div>
-                          <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
-                            Observations et sujets de prière
-                          </h3>
+                        <BlocSection lettre="D" titre="Observations et sujets de prière">
                           <p className="text-sm whitespace-pre-wrap leading-relaxed">{r.observations}</p>
-                        </div>
+                        </BlocSection>
                       )}
 
                       {peutEditer && (

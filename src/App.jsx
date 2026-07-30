@@ -589,21 +589,9 @@ function FormulaireRapport({
         </div>
       </section>
 
-      {/* B. Compte rendu personnel du chef */}
+      {/* B. Membres */}
       <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
-        <TitreSection lettre="B" titre="Mon compte rendu personnel cette semaine" />
-        <SectionComptePerso
-          compte={form.compte_perso || emptyComptePerso()}
-          onChange={(patch) => setForm((f) => ({
-            ...f,
-            compte_perso: { ...(f.compte_perso || emptyComptePerso()), ...patch },
-          }))}
-        />
-      </section>
-
-      {/* C. Membres */}
-      <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
-        <TitreSection lettre="C" titre="Suivi des membres — routines spirituelles" />
+        <TitreSection lettre="B" titre="Suivi des membres — routines spirituelles" />
         <div className="p-3 space-y-3" style={{ backgroundColor: "white" }}>
           {form.membres.map((m, i) => (
             <CarteMembre key={i} index={i} membre={m}
@@ -616,6 +604,18 @@ function FormulaireRapport({
             <Plus className="w-4 h-4" /> Ajouter un membre
           </button>
         </div>
+      </section>
+
+      {/* C. Compte rendu personnel du chef */}
+      <section className="rounded-xl overflow-hidden shadow-sm" style={{ border: "1px solid #F0DCBE" }}>
+        <TitreSection lettre="C" titre="Compte rendu personnel du chef cette semaine" />
+        <SectionComptePerso
+          compte={form.compte_perso || emptyComptePerso()}
+          onChange={(patch) => setForm((f) => ({
+            ...f,
+            compte_perso: { ...(f.compte_perso || emptyComptePerso()), ...patch },
+          }))}
+        />
       </section>
 
       {/* D. Observations */}
