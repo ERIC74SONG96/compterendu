@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
-  Target, HandHeart, AlertCircle, LogOut
+  Target, HandHeart, AlertCircle, LogOut, Calendar
 } from "lucide-react";
 import AuthScreen from "./AuthScreen";
 import { isConfigured, onAuthStateChange, signOut } from "./auth";
@@ -364,8 +364,8 @@ function FormulaireRapport({
             onChange={(v) => setForm((f) => ({ ...f, chef: v }))} placeholder="Ex. : Junior" />
           <Champ label="Église de maison" valeur={form.eglise}
             onChange={(v) => setForm((f) => ({ ...f, eglise: v }))} placeholder="Ex. : Joseph" />
-          <Champ label="Semaine" valeur={form.semaine}
-            onChange={(v) => setForm((f) => ({ ...f, semaine: v }))} placeholder="Ex. : 27 juil. – 2 août" />
+          <ChampSemaine label="Semaine" valeur={form.semaine}
+            onChange={(v) => setForm((f) => ({ ...f, semaine: v }))} />
         </div>
       </section>
 
@@ -702,6 +702,65 @@ function StatMini({ icone: Icone, valeur, label }) {
       <span className="text-white font-bold text-lg leading-none">{valeur}</span>
       <span className="text-white/85 text-xs mt-0.5 leading-tight">{label}</span>
     </div>
+  );
+}
+
+function lundiDe(date) {
+  const d = new Date(date);
+  const jour = d.getDay();
+  const diff = jour === 0 ? -6 : 1 - jour;
+  d.setDate(d.getDate() + diff);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function formatSemaine(isoDate) {
+  if (!isoDate) return "";
+  const debut = lundiDe(new Date(`${isoDate}T12:00:00`));
+  const fin = new Date(debut);
+  fin.setDate(debut.getDate() + 6);
+  const fmt = (d) =>
+    d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(/\.$/, "");
+  return `${fmt(debut)} – ${fmt(fin)}`;
+}
+
+function isoDuLundi(date = new Date()) {
+  return lundiDe(date).toISOString().slice(0, 10);
+}
+
+function ChampSemaine({ label, valeur, onChange }) {
+  const [datePick, setDatePick] = useState(() => (valeur ? "" : isoDuLundi()));
+
+  useEffect(() => {
+    if (!valeur) onChange(formatSemaine(isoDuLundi()));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const choisirDate = (iso) => {
+    setDatePick(iso);
+    if (iso) onChange(formatSemaine(iso));
+  };
+
+  return (
+    <label className="block">
+      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
+      {valeur && (
+        <p className="text-sm mt-1 font-semibold" style={{ color: INK }}>{valeur}</p>
+      )}
+      <div className="relative mt-1">
+        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#A08A6B" }} />
+        <input
+          type="date"
+          value={datePick}
+          onChange={(e) => choisirDate(e.target.value)}
+          placeholder=""
+          className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none cursor-pointer"
+          style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM, color: INK }}
+        />
+      </div>
+      <p className="text-xs mt-1" style={{ color: "#8A7358" }}>
+        {valeur ? "Choisissez une date pour changer la semaine" : "Choisissez un jour — la semaine lun.–dim. s'affiche"}
+      </p>
+    </label>
   );
 }
 
