@@ -27,6 +27,12 @@ function extraireMessageBrut(err) {
   if (!err) return "";
   if (typeof err === "string") return err.trim();
 
+  if (typeof err.message === "object" && err.message !== null) {
+    const m = err.message;
+    if (typeof m.message === "string") return m.message.trim();
+    if (typeof m.error === "string") return m.error.trim();
+  }
+
   const candidats = [
     err.message,
     err.error_description,
@@ -59,41 +65,39 @@ function extraireMessageBrut(err) {
 export function traduireErreurAuth(err) {
   const raw = extraireMessageBrut(err);
   const msg = raw.toLowerCase();
-  const code = String(err?.code || err?.status || "").toLowerCase();
+  const code = String(err?.code || "").toLowerCase();
+  const status = Number(err?.status || err?.statusCode || 0);
+
+  const estErreurSmtp = (
+    msg.includes("error sending confirmation email")
+    || msg.includes("error sending email")
+    || msg.includes("smtp")
+    || msg.includes("mailer")
+    || msg.includes("535")
+    || msg.includes("badcredentials")
+    || msg.includes("username and password not accepted")
+    || msg.includes("authentication failed")
+    || code.includes("unexpected_failure")
+    || (status === 500 && code.includes("unexpected"))
+  );
+
+  if (estErreurSmtp) {
+    return {
+      type: "smtp",
+      texte: "Échec SMTP Gmail : le mot de passe Supabase est incorrect. Utilisez un mot de passe d'application Google (16 caractères), pas votre mot de passe Gmail habituel. Supabase → Authentication → SMTP Settings → Password.",
+    };
+  }
 
   if (
     msg.includes("rate limit")
     || msg.includes("rate_limit")
     || code.includes("over_email_send_rate_limit")
-    || code.includes("429")
+    || status === 429
     || msg.includes("email rate limit exceeded")
   ) {
     return {
       type: "rate_limit",
       texte: "Trop d'e-mails envoyés récemment. Attendez environ 1 heure, ou connectez-vous si votre compte existe déjà.",
-    };
-  }
-  if (
-    msg.includes("error sending confirmation email")
-    || msg.includes("error sending email")
-    || msg.includes("smtp")
-    || msg.includes("mailer")
-    || code.includes("unexpected_failure")
-  ) {
-    return {
-      type: "smtp",
-      texte: "Impossible d'envoyer l'e-mail de confirmation. Vérifiez la configuration SMTP Supabase (mot de passe d'application Gmail). Vous pouvez aussi désactiver « Confirm email » dans Supabase pour vous inscrire sans e-mail.",
-    };
-  }
-  if (
-    msg.includes("535")
-    || msg.includes("authentication failed")
-    || msg.includes("invalid credentials")
-    || msg.includes("username and password not accepted")
-  ) {
-    return {
-      type: "smtp",
-      texte: "Échec de connexion SMTP Gmail. Utilisez un mot de passe d'application Google (16 caractères), pas votre mot de passe Gmail habituel.",
     };
   }
   if (msg.includes("email_not_confirmed") || msg.includes("email not confirmed")) {

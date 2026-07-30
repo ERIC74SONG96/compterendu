@@ -2,6 +2,12 @@ import React, { useState } from "react";
 import { Flame, Loader2, Mail, Lock, User, CheckCircle2, XCircle, Info } from "lucide-react";
 import { signIn, signUp, renvoyerConfirmationEmail, traduireErreurAuth } from "./auth";
 
+function extraireTexteErreur(err) {
+  if (!err) return "Une erreur est survenue. Réessayez.";
+  if (typeof err === "string") return err;
+  return traduireErreurAuth(err).texte;
+}
+
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
 const CREAM = "#FDFBF6";
@@ -19,11 +25,17 @@ export default function AuthScreen({ onMessage }) {
   const [alerte, setAlerte] = useState(null);
   const [renvoiEnCours, setRenvoiEnCours] = useState(false);
   const [limiteEmail, setLimiteEmail] = useState(false);
+  const [erreurSmtp, setErreurSmtp] = useState(false);
 
   const afficherAlerte = (texte, ok = true) => {
-    const message = typeof texte === "string" && texte.trim() && texte.trim() !== "{}"
-      ? texte.trim()
-      : "Une erreur est survenue. Réessayez.";
+    let message = texte;
+    if (typeof message !== "string") {
+      message = extraireTexteErreur(message);
+    }
+    message = message.trim();
+    if (!message || message === "{}") {
+      message = "Une erreur est survenue. Réessayez.";
+    }
     setAlerte({ texte: message, ok });
     onMessage(message, ok);
     if (ok && !message.includes("e-mail")) {
@@ -77,7 +89,7 @@ export default function AuthScreen({ onMessage }) {
     } catch (err) {
       const { type, texte } = traduireErreurAuth(err);
       if (type === "rate_limit") setLimiteEmail(true);
-      if (type === "smtp") setLimiteEmail(true);
+      if (type === "smtp") { setErreurSmtp(true); setLimiteEmail(true); }
       if (type === "email_non_confirme" || type === "deja_inscrit") {
         setAttenteConfirmation(email.trim());
         if (type === "deja_inscrit") setMode("login");
@@ -97,7 +109,7 @@ export default function AuthScreen({ onMessage }) {
     } catch (err) {
       const { type, texte } = traduireErreurAuth(err);
       if (type === "rate_limit") setLimiteEmail(true);
-      if (type === "smtp") setLimiteEmail(true);
+      if (type === "smtp") { setErreurSmtp(true); setLimiteEmail(true); }
       afficherAlerte(texte, false);
     }
     setRenvoiEnCours(false);
@@ -140,7 +152,30 @@ export default function AuthScreen({ onMessage }) {
             ))}
           </div>
 
-          {limiteEmail && (
+          {erreurSmtp && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3.5 flex gap-3 items-start"
+              style={{ backgroundColor: "#FDEDEC", border: "2px solid #B3402A", fontFamily: "system-ui, sans-serif" }}
+              role="alert"
+            >
+              <XCircle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "#B3402A" }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm" style={{ color: "#7A1F1A" }}>SMTP Gmail — mot de passe incorrect</p>
+                <p className="text-sm mt-1.5 leading-relaxed" style={{ color: "#6B2D2A" }}>
+                  Supabase refuse la connexion Gmail (<strong>535 BadCredentials</strong>).
+                  Dans Supabase → SMTP Settings, le champ <strong>Password</strong> doit être un{" "}
+                  <strong>mot de passe d&apos;application Google</strong> (16 caractères), pas votre mot de passe Gmail.
+                </p>
+                <ol className="text-xs mt-2 space-y-1 list-decimal list-inside leading-relaxed" style={{ color: "#6B2D2A" }}>
+                  <li>Google → Sécurité → Validation en 2 étapes (activée)</li>
+                  <li>Mots de passe des applications → créer « Supabase »</li>
+                  <li>Copier le code → Supabase SMTP → Password → Save</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {limiteEmail && !erreurSmtp && (
             <div
               className="mb-4 rounded-xl px-4 py-3.5 flex gap-3 items-start"
               style={{ backgroundColor: "#FFF4E5", border: "2px solid #DF7B1A", fontFamily: "system-ui, sans-serif" }}
