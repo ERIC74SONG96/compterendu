@@ -1,0 +1,36 @@
+-- Configuration e-mail Supabase Auth (Dashboard)
+-- Projet : uturszvczqxxqkdzehcj
+--
+-- ERREUR « email rate limit exceeded »
+-- Le service e-mail intégré Supabase est limité à 2 e-mails / heure.
+--
+-- ═══════════════════════════════════════════════════════════════
+-- SOLUTION RECOMMANDÉE (production) — SMTP personnalisé
+-- ═══════════════════════════════════════════════════════════════
+-- Dashboard → Authentication → SMTP Settings
+--   https://supabase.com/dashboard/project/uturszvczqxxqkdzehcj/auth/smtp
+--
+-- Exemples de services gratuits/abordables :
+--   • Resend (resend.com) — 100 e-mails/jour gratuits
+--   • Brevo (brevo.com)
+--   • Gmail (mot de passe d'application)
+--
+-- Renseigner : hôte SMTP, port 587, utilisateur, mot de passe,
+-- e-mail expéditeur (ex. no-reply@votredomaine.com).
+--
+-- Puis Authentication → Rate Limits → augmenter la limite e-mails.
+--
+-- ═══════════════════════════════════════════════════════════════
+-- SOLUTION RAPIDE (tests / petite équipe) — sans confirmation e-mail
+-- ═══════════════════════════════════════════════════════════════
+-- Dashboard → Authentication → Sign In / Providers → Email
+--   https://supabase.com/dashboard/project/uturszvczqxxqkdzehcj/auth/providers
+--
+-- Désactiver « Confirm email » → inscription immédiate sans e-mail.
+--
+-- ═══════════════════════════════════════════════════════════════
+-- URL de redirection (après confirmation)
+-- ═══════════════════════════════════════════════════════════════
+-- Authentication → URL Configuration
+--   Site URL : https://compterendu.vercel.app
+--   Redirect URLs : https://compterendu.vercel.app/**

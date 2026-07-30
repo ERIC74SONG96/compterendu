@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Flame, Loader2, Mail, Lock, User, CheckCircle2, XCircle, Info } from "lucide-react";
-import { signIn, signUp, renvoyerConfirmationEmail } from "./auth";
+import { signIn, signUp, renvoyerConfirmationEmail, traduireErreurAuth } from "./auth";
 
 const ORANGE = "#DF7B1A";
 const ORANGE_DARK = "#B45E0C";
@@ -18,6 +18,7 @@ export default function AuthScreen({ onMessage }) {
   const [attenteConfirmation, setAttenteConfirmation] = useState(null);
   const [alerte, setAlerte] = useState(null);
   const [renvoiEnCours, setRenvoiEnCours] = useState(false);
+  const [limiteEmail, setLimiteEmail] = useState(false);
 
   const afficherAlerte = (texte, ok = true) => {
     setAlerte({ texte, ok });
@@ -59,18 +60,13 @@ export default function AuthScreen({ onMessage }) {
         }
       }
     } catch (err) {
-      const code = err.code || err.message || "";
-      const msg = code.includes("email_not_confirmed") || err.message?.includes("Email not confirmed")
-        ? "E-mail non confirmé. Consultez votre boîte mail (ou spam) et cliquez le lien de confirmation."
-        : err.message?.includes("Invalid login")
-          ? "E-mail ou mot de passe incorrect."
-          : err.message?.includes("already registered")
-            ? "Cet e-mail est déjà utilisé. Si vous venez de vous inscrire, confirmez d'abord votre e-mail."
-            : err.message || "Erreur de connexion.";
-      if (msg.includes("non confirmé") || msg.includes("confirmez")) {
+      const { type, texte } = traduireErreurAuth(err);
+      if (type === "rate_limit") setLimiteEmail(true);
+      if (type === "email_non_confirme" || type === "deja_inscrit") {
         setAttenteConfirmation(email.trim());
+        if (type === "deja_inscrit") setMode("login");
       }
-      afficherAlerte(msg, false);
+      afficherAlerte(texte, false);
     }
     setChargement(false);
   };
@@ -83,7 +79,9 @@ export default function AuthScreen({ onMessage }) {
       if (error) throw error;
       afficherAlerte("Nouvel e-mail de confirmation envoyé. Vérifiez votre boîte mail.");
     } catch (err) {
-      afficherAlerte(err.message || "Impossible de renvoyer l'e-mail.", false);
+      const { type, texte } = traduireErreurAuth(err);
+      if (type === "rate_limit") setLimiteEmail(true);
+      afficherAlerte(texte, false);
     }
     setRenvoiEnCours(false);
   };
@@ -125,6 +123,31 @@ export default function AuthScreen({ onMessage }) {
             ))}
           </div>
 
+          {limiteEmail && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3.5 flex gap-3 items-start"
+              style={{ backgroundColor: "#FFF4E5", border: "2px solid #DF7B1A", fontFamily: "system-ui, sans-serif" }}
+              role="alert"
+            >
+              <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: ORANGE_DARK }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm" style={{ color: BROWN }}>Limite d&apos;e-mails atteinte</p>
+                <p className="text-sm mt-1.5 leading-relaxed" style={{ color: "#6B5340" }}>
+                  Supabase n&apos;envoie que <strong>2 e-mails par heure</strong> avec le service gratuit.
+                  Attendez <strong>1 heure</strong>, puis réessayez — ou passez à l&apos;onglet <strong>Connexion</strong> si votre compte existe déjà.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setLimiteEmail(false); setMode("login"); }}
+                  className="mt-2 text-xs font-semibold underline"
+                  style={{ color: ORANGE_DARK }}
+                >
+                  Aller à la connexion
+                </button>
+              </div>
+            </div>
+          )}
+
           {attenteConfirmation && (
             <div
               className="mb-4 rounded-xl px-4 py-3.5 flex gap-3 items-start"
@@ -144,11 +167,11 @@ export default function AuthScreen({ onMessage }) {
                   <button
                     type="button"
                     onClick={renvoyerEmail}
-                    disabled={renvoiEnCours}
+                    disabled={renvoiEnCours || limiteEmail}
                     className="text-xs font-semibold underline disabled:opacity-60"
                     style={{ color: "#2E6DA4" }}
                   >
-                    {renvoiEnCours ? "Envoi…" : "Renvoyer l'e-mail de confirmation"}
+                    {renvoiEnCours ? "Envoi…" : limiteEmail ? "Renvoi indisponible (limite atteinte)" : "Renvoyer l'e-mail de confirmation"}
                   </button>
                   <button
                     type="button"

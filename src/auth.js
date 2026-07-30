@@ -22,6 +22,41 @@ export function isConfigured() {
   return Boolean(supabase);
 }
 
+/** Messages d'erreur auth en français (dont limite e-mail Supabase). */
+export function traduireErreurAuth(err) {
+  const raw = err?.message || "";
+  const msg = raw.toLowerCase();
+  const code = (err?.code || "").toLowerCase();
+
+  if (
+    msg.includes("rate limit")
+    || msg.includes("rate_limit")
+    || code.includes("over_email_send_rate_limit")
+    || msg.includes("email rate limit exceeded")
+  ) {
+    return {
+      type: "rate_limit",
+      texte: "Trop d'e-mails envoyés récemment (limite Supabase : 2 par heure). Attendez environ 1 heure avant de réessayer, ou connectez-vous si votre compte existe déjà.",
+    };
+  }
+  if (msg.includes("email_not_confirmed") || msg.includes("email not confirmed")) {
+    return {
+      type: "email_non_confirme",
+      texte: "E-mail non confirmé. Consultez votre boîte mail (ou spam) et cliquez le lien de confirmation.",
+    };
+  }
+  if (msg.includes("invalid login")) {
+    return { type: "generic", texte: "E-mail ou mot de passe incorrect." };
+  }
+  if (msg.includes("already registered") || msg.includes("user already registered")) {
+    return {
+      type: "deja_inscrit",
+      texte: "Cet e-mail est déjà utilisé. Connectez-vous, ou confirmez d'abord votre e-mail si vous venez de vous inscrire.",
+    };
+  }
+  return { type: "generic", texte: raw || "Erreur de connexion." };
+}
+
 export function onAuthStateChange(callback) {
   if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } };
   return supabase.auth.onAuthStateChange((event, session) => callback(session, event));
