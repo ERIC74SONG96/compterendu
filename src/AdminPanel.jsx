@@ -32,6 +32,7 @@ export default function AdminPanel({
   const [recherche, setRecherche] = useState("");
   const [ouverts, setOuverts] = useState({});
   const [listeMembresOuverte, setListeMembresOuverte] = useState(true);
+  const [listeChefsOuverte, setListeChefsOuverte] = useState(true);
 
   const registreMembres = useMemo(() => {
     const map = new Map();
@@ -67,34 +68,78 @@ export default function AdminPanel({
   }, [rapports]);
 
   const registreChefs = useMemo(() => {
-    const map = new Map();
+    const byKey = new Map();
+
+    const fusionner = (key, entree) => {
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { ...entree, rapports: [...(entree.rapports || [])] });
+        return;
+      }
+      entree.rapports?.forEach((r) => {
+        if (!prev.rapports.some((x) => x.id === r.id)) prev.rapports.push(r);
+      });
+      if (entree.profil && !prev.profil) prev.profil = entree.profil;
+      if (entree.email && !prev.email) prev.email = entree.email;
+      if (entree.eglise && entree.eglise !== "—") prev.eglise = entree.eglise;
+    };
+
     profils.filter((p) => p.role !== "admin").forEach((p) => {
       const nom = p.chef_name?.trim() || p.email || "Sans nom";
-      map.set(p.id, {
-        type: "chef",
+      const rapportsChef = rapports.filter(
+        (r) => r.user_id === p.id || normaliserTexte(r.chef) === normaliserTexte(nom),
+      );
+      fusionner(p.id, {
         nom,
         email: p.email,
-        eglise: p.eglise_maison || "—",
+        eglise: p.eglise_maison || rapportsChef[0]?.eglise || "—",
         role: p.role === "chef_chambre" ? LIBELLE_CHEF_EGLISE : "Chef d'équipe",
         profil: p,
+        rapports: rapportsChef,
       });
     });
+
     rapports.forEach((r) => {
       if (!r.chef?.trim()) return;
-      const key = `rapport|${normaliserTexte(r.chef)}|${normaliserTexte(r.eglise)}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          type: "chef",
-          nom: r.chef.trim(),
+      const nom = r.chef.trim();
+      const nomNorm = normaliserTexte(nom);
+      const existant = [...byKey.entries()].find(
+        ([, e]) => e.profil?.id === r.user_id || normaliserTexte(e.nom) === nomNorm,
+      );
+      if (existant) {
+        const [, e] = existant;
+        if (!e.rapports.some((x) => x.id === r.id)) e.rapports.push(r);
+      } else {
+        fusionner(`rapport|${nomNorm}`, {
+          nom,
           email: null,
           eglise: r.eglise || "—",
-          role: "Chef d'équipe (rapport)",
-          rapport: r,
+          role: "Chef d'équipe",
+          rapports: [r],
         });
       }
     });
-    return [...map.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+
+    return [...byKey.values()]
+      .map((e) => {
+        const tri = [...e.rapports].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        return { ...e, rapport: tri[0] || null, nbRapports: tri.length };
+      })
+      .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   }, [profils, rapports]);
+
+  const chefVersHit = (entry) => ({
+    type: "chef",
+    nom: entry.nom,
+    eglise: entry.eglise,
+    chef: entry.role,
+    semaine: entry.email || "—",
+    score: null,
+    rapportId: entry.rapport?.id || entry.profil?.id,
+    rapport: entry.rapport,
+    profil: entry.profil,
+    nbRapports: entry.nbRapports,
+  });
 
   const toutesEglises = useMemo(() => {
     const noms = new Set([...(eglisesList || []), ...rapports.map((r) => r.eglise).filter(Boolean), ...profils.map((p) => p.eglise_maison).filter(Boolean)]);
@@ -129,63 +174,65 @@ export default function AdminPanel({
     [ficheEglises, egliseActive],
   );
 
-  const resultatsRecherche = useMemo(() => {
+  const resultatsChefs = useMemo(() => {
     const q = normaliserTexte(recherche);
     if (!q) return [];
-
-    const hits = [];
-
-    registreMembres.forEach((entry) => {
-      if (!texteCorrespond(q, entry.nom, ...entry.chefs, ...entry.eglises)) return;
-      const hit = entry.dernier;
-      hits.push({
-        type: "membre",
-        nom: entry.nom,
-        eglise: hit.rapport.eglise || "—",
-        chef: hit.rapport.chef || "—",
-        semaine: hit.rapport.semaine || "—",
-        score: scoreMembre(hit.membre),
-        presence: hit.membre.presence,
-        rapportId: hit.rapport.id,
-        rapport: hit.rapport,
-        nbRapports: entry.nbRapports,
+    return registreChefs
+      .filter((entry) => texteCorrespond(q, entry.nom, entry.email, entry.eglise, entry.role))
+      .map(chefVersHit)
+      .sort((a, b) => {
+        const exactA = normaliserTexte(a.nom) === q;
+        const exactB = normaliserTexte(b.nom) === q;
+        if (exactA !== exactB) return exactA ? -1 : 1;
+        return a.nom.localeCompare(b.nom, "fr");
       });
-    });
+  }, [registreChefs, recherche]);
 
-    registreChefs.forEach((entry) => {
-      if (!texteCorrespond(q, entry.nom, entry.email, entry.eglise, entry.role)) return;
-      if (hits.some((h) => h.type === "chef" && normaliserTexte(h.nom) === normaliserTexte(entry.nom))) return;
-      hits.push({
-        type: "chef",
-        nom: entry.nom,
-        eglise: entry.eglise,
-        chef: entry.role,
-        semaine: entry.email || "—",
-        score: null,
-        rapportId: entry.rapport?.id || entry.profil?.id,
-        rapport: entry.rapport,
-        profil: entry.profil,
+  const resultatsDisciples = useMemo(() => {
+    const q = normaliserTexte(recherche);
+    if (!q) return [];
+    return registreMembres
+      .filter((entry) => texteCorrespond(q, entry.nom, ...entry.eglises))
+      .map((entry) => {
+        const hit = entry.dernier;
+        return {
+          type: "membre",
+          nom: entry.nom,
+          eglise: hit.rapport.eglise || "—",
+          chef: hit.rapport.chef || "—",
+          semaine: hit.rapport.semaine || "—",
+          score: scoreMembre(hit.membre),
+          presence: hit.membre.presence,
+          rapportId: hit.rapport.id,
+          rapport: hit.rapport,
+          nbRapports: entry.nbRapports,
+        };
       });
-    });
+  }, [registreMembres, recherche, scoreMembre]);
 
-    return hits.sort((a, b) => {
-      if (a.type !== b.type) return a.type === "membre" ? -1 : 1;
-      return a.nom.localeCompare(b.nom, "fr");
-    });
-  }, [registreMembres, registreChefs, recherche, scoreMembre]);
+  const resultatsRecherche = useMemo(
+    () => [...resultatsChefs, ...resultatsDisciples],
+    [resultatsChefs, resultatsDisciples],
+  );
 
   const membresAffiches = useMemo(() => {
     const q = normaliserTexte(recherche);
     if (!q) return registreMembres;
-    return registreMembres.filter((entry) => texteCorrespond(q, entry.nom, ...entry.chefs, ...entry.eglises));
+    return registreMembres.filter((entry) => texteCorrespond(q, entry.nom, ...entry.eglises));
   }, [registreMembres, recherche]);
+
+  const chefsAffiches = useMemo(() => {
+    const q = normaliserTexte(recherche);
+    if (!q) return registreChefs;
+    return registreChefs.filter((entry) => texteCorrespond(q, entry.nom, entry.email, entry.eglise, entry.role));
+  }, [registreChefs, recherche]);
 
   const statsGlobales = useMemo(() => ({
     eglises: toutesEglises.length,
     rapports: rapports.length,
     disciples: registreMembres.length,
-    chefs: profils.filter((p) => p.role !== "admin").length,
-  }), [rapports, profils, toutesEglises, registreMembres]);
+    chefs: registreChefs.length,
+  }), [rapports, toutesEglises, registreMembres, registreChefs]);
 
   const ouvrirEglise = (nom) => {
     setEgliseActive(nom);
@@ -200,19 +247,10 @@ export default function AdminPanel({
 
   const ouvrirRapportDepuisRecherche = (hit) => {
     const eglise = resoudreEglise(hit.eglise);
-    if (hit.type === "chef" && hit.profil && !hit.rapport) {
-      if (eglise) {
-        setEgliseActive(eglise);
-        setVue("eglise");
-      }
-      setRecherche("");
-      return;
-    }
-    if (eglise) {
-      setEgliseActive(eglise);
-      setVue("eglise");
-      if (hit.rapport?.id) setOuverts({ [hit.rapport.id]: true });
-    }
+    if (!eglise) return;
+    setEgliseActive(eglise);
+    setVue("eglise");
+    if (hit.rapport?.id) setOuverts({ [hit.rapport.id]: true });
     setRecherche("");
   };
 
@@ -259,47 +297,119 @@ export default function AdminPanel({
           />
         </label>
         <p className="text-xs mt-2 leading-relaxed" style={{ color: "#8A7358", fontFamily: "system-ui, sans-serif" }}>
-          Les disciples apparaissent ici lorsqu&apos;un chef d&apos;équipe les a saisis dans la section B d&apos;un compte rendu hebdomadaire.
+          Les <strong>chefs d&apos;équipe</strong> (ex. Emma) et les <strong>disciples</strong> (ex. Reine) sont listés séparément. Tapez un nom pour filtrer.
         </p>
 
         {recherche.trim() && (
-          <div className="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
+          <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
             {resultatsRecherche.length === 0 ? (
               <p className="text-sm py-2 text-center" style={{ color: "#8A7358" }}>Aucun résultat pour « {recherche} »</p>
             ) : (
-              resultatsRecherche.map((hit) => (
-                <button
-                  key={`${hit.type}|${hit.rapportId}|${hit.nom}`}
-                  type="button"
-                  onClick={() => ouvrirRapportDepuisRecherche(hit)}
-                  className="w-full text-left rounded-lg px-3 py-2.5 flex items-center gap-3 transition-colors hover:opacity-90"
-                  style={{ backgroundColor: CARD, border: "1px solid #F0DCBE", fontFamily: "system-ui, sans-serif" }}
-                >
-                  <User className="w-4 h-4 shrink-0" style={{ color: ORANGE_DARK }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">
-                      {hit.nom}
-                      {hit.type === "chef" && (
-                        <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "#2C1810", color: "#FCE3C6" }}>
-                          Chef
-                        </span>
-                      )}
+              <>
+                {resultatsChefs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1.5 px-1" style={{ color: ORANGE_DARK }}>
+                      Chefs ({resultatsChefs.length})
                     </p>
-                    <p className="text-xs truncate" style={{ color: "#8A7358" }}>
-                      {hit.type === "membre"
-                        ? `${hit.eglise} · Chef ${hit.chef} · ${hit.semaine}${hit.nbRapports > 1 ? ` · ${hit.nbRapports} rapports` : ""}`
-                        : `${hit.eglise} · ${hit.chef}${hit.semaine !== "—" ? ` · ${hit.semaine}` : ""}`}
-                    </p>
+                    <div className="space-y-1.5">
+                      {resultatsChefs.map((hit) => (
+                        <button
+                          key={`chef|${hit.rapportId}|${hit.nom}`}
+                          type="button"
+                          onClick={() => ouvrirRapportDepuisRecherche(hit)}
+                          className="w-full text-left rounded-lg px-3 py-2.5 flex items-center gap-3 transition-colors hover:opacity-90"
+                          style={{ backgroundColor: "#2C1810", border: "1px solid #5C3A10", fontFamily: "system-ui, sans-serif" }}
+                        >
+                          <Crown className="w-4 h-4 shrink-0" style={{ color: "#FCE3C6" }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm truncate text-white">{hit.nom}</p>
+                            <p className="text-xs truncate" style={{ color: "#D4A574" }}>
+                              {hit.eglise} · {hit.chef}
+                              {hit.nbRapports > 0 ? ` · ${hit.nbRapports} rapport${hit.nbRapports > 1 ? "s" : ""}` : " · inscrit, pas encore de rapport"}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#D4A574" }} />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  {hit.type === "membre" && (
-                    <span className="text-xs font-bold shrink-0" style={{ color: ORANGE_DARK }}>{hit.score}/12</span>
-                  )}
-                  <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#A08A6B" }} />
-                </button>
-              ))
+                )}
+                {resultatsDisciples.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1.5 px-1" style={{ color: ORANGE_DARK }}>
+                      Disciples ({resultatsDisciples.length})
+                    </p>
+                    <div className="space-y-1.5">
+                      {resultatsDisciples.map((hit) => (
+                        <button
+                          key={`membre|${hit.rapportId}|${hit.nom}`}
+                          type="button"
+                          onClick={() => ouvrirRapportDepuisRecherche(hit)}
+                          className="w-full text-left rounded-lg px-3 py-2.5 flex items-center gap-3 transition-colors hover:opacity-90"
+                          style={{ backgroundColor: CARD, border: "1px solid #F0DCBE", fontFamily: "system-ui, sans-serif" }}
+                        >
+                          <User className="w-4 h-4 shrink-0" style={{ color: ORANGE_DARK }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm truncate">{hit.nom}</p>
+                            <p className="text-xs truncate" style={{ color: "#8A7358" }}>
+                              {hit.eglise} · Chef {hit.chef} · {hit.semaine}
+                              {hit.nbRapports > 1 ? ` · ${hit.nbRapports} rapports` : ""}
+                            </p>
+                          </div>
+                          <span className="text-xs font-bold shrink-0" style={{ color: ORANGE_DARK }}>{hit.score}/12</span>
+                          <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#A08A6B" }} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
+
+        <div className="mt-4 pt-4" style={{ borderTop: "1px solid #F0DCBE" }}>
+          <button
+            type="button"
+            onClick={() => setListeChefsOuverte((o) => !o)}
+            className="w-full flex items-center justify-between text-left"
+            style={{ fontFamily: "system-ui, sans-serif" }}
+          >
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>
+              Tous les chefs d&apos;équipe ({registreChefs.length})
+            </span>
+            <ChevronRight className={`w-4 h-4 transition-transform ${listeChefsOuverte ? "rotate-90" : ""}`} style={{ color: "#A08A6B" }} />
+          </button>
+          {listeChefsOuverte && (
+            <div className="mt-2 space-y-1.5 max-h-56 overflow-y-auto">
+              {chefsAffiches.length === 0 ? (
+                <p className="text-sm py-3 text-center rounded-lg" style={{ color: "#8A7358", backgroundColor: CREAM }}>
+                  {recherche.trim() ? `Aucun chef pour « ${recherche} »` : "Aucun chef inscrit."}
+                </p>
+              ) : (
+                chefsAffiches.map((entry) => (
+                  <button
+                    key={entry.profil?.id || entry.nom}
+                    type="button"
+                    onClick={() => ouvrirRapportDepuisRecherche(chefVersHit(entry))}
+                    className="w-full text-left rounded-lg px-3 py-2.5 flex items-center gap-3 hover:opacity-90"
+                    style={{ backgroundColor: "#2C1810", border: "1px solid #5C3A10", fontFamily: "system-ui, sans-serif" }}
+                  >
+                    <Crown className="w-4 h-4 shrink-0" style={{ color: "#FCE3C6" }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate text-white">{entry.nom}</p>
+                      <p className="text-xs truncate" style={{ color: "#D4A574" }}>
+                        {entry.eglise} · {entry.role}
+                        {entry.nbRapports > 0 ? ` · ${entry.nbRapports} rapport${entry.nbRapports > 1 ? "s" : ""}` : ""}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#D4A574" }} />
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="mt-4 pt-4" style={{ borderTop: "1px solid #F0DCBE" }}>
           <button
