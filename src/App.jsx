@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame, Users, ClipboardList, Plus, Trash2, Pencil, ChevronDown,
   ChevronUp, CheckCircle2, XCircle, Loader2, RefreshCw, Save, X,
@@ -7,6 +7,7 @@ import {
 import AuthScreen from "./AuthScreen";
 import { isConfigured, onAuthStateChange, signOut, updateProfil } from "./auth";
 import { deleteRapport, loadRapports, saveRapport } from "./storage";
+import { ajouterEglise, loadEglises } from "./eglises";
 
 // ============ Constantes ============
 const ORANGE = "#DF7B1A";
@@ -67,6 +68,7 @@ export default function CompteRenduApp() {
   const [message, setMessage] = useState(null);
   const [erreurStockage, setErreurStockage] = useState(false);
   const [ouverts, setOuverts] = useState({});
+  const [eglises, setEglises] = useState([]);
 
   const notifier = (texte, ok = true) => {
     setMessage({ texte, ok });
@@ -116,6 +118,17 @@ export default function CompteRenduApp() {
 
   useEffect(() => { if (session) charger(); }, [charger, session]);
 
+  const chargerEglises = useCallback(async () => {
+    if (!session) { setEglises([]); return; }
+    try {
+      setEglises(await loadEglises());
+    } catch {
+      setEglises([]);
+    }
+  }, [session]);
+
+  useEffect(() => { if (session) chargerEglises(); }, [chargerEglises, session]);
+
   // Actualisation automatique pour voir les rapports des autres membres
   useEffect(() => {
     if (vue !== "dashboard") return;
@@ -128,10 +141,17 @@ export default function CompteRenduApp() {
     if (!session) { notifier("Connectez-vous pour enregistrer.", false); return; }
     if (!form.chef.trim()) { notifier("Indiquez le nom du chef d'équipe.", false); return; }
     if (!form.semaine.trim()) { notifier("Indiquez la semaine concernée.", false); return; }
+    if (!form.eglise.trim()) { notifier("Choisissez une église de maison.", false); return; }
+    const egliseCanonique = eglises.find((e) => e.toLowerCase() === form.eglise.trim().toLowerCase());
+    if (!egliseCanonique) {
+      notifier("Choisissez une église dans la liste ou ajoutez-la avec le bouton +.", false);
+      return;
+    }
     setSauvegarde(true);
     const id = editId || `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const donnees = {
       ...form,
+      eglise: egliseCanonique,
       membres: form.membres.filter((m) => m.nom.trim() !== ""),
       id,
       user_id: session.user.id,
@@ -143,7 +163,7 @@ export default function CompteRenduApp() {
       if (form.eglise.trim() || form.chef.trim()) {
         await updateProfil({
           chefName: form.chef.trim() || undefined,
-          egliseMaison: form.eglise.trim() || undefined,
+          egliseMaison: egliseCanonique || undefined,
         });
       }
       notifier(editId ? "Rapport mis à jour." : "Rapport enregistré et partagé avec le groupe.");
@@ -152,9 +172,10 @@ export default function CompteRenduApp() {
         ...formDepuisProfil({
           ...session.user.user_metadata,
           chef_name: form.chef.trim() || session.user.user_metadata?.chef_name,
-          eglise_maison: form.eglise.trim() || session.user.user_metadata?.eglise_maison,
+          eglise_maison: egliseCanonique || session.user.user_metadata?.eglise_maison,
         }),
       });
+      await chargerEglises();
       await charger();
       setVue("dashboard");
     } catch {
@@ -219,16 +240,22 @@ export default function CompteRenduApp() {
   const scoreFidelite = (fid) => FIDELITE.filter((c) => fid && fid[c.key] === true).length;
   const scoreMembre = (m) => ROUTINES.filter((r) => m.routines && m.routines[r]).length;
 
-  const eglisesConnues = useMemo(() => {
-    const noms = new Set();
-    rapports.forEach((r) => {
-      if (r.eglise?.trim()) noms.add(r.eglise.trim());
-    });
-    if (session?.user?.user_metadata?.eglise_maison?.trim()) {
-      noms.add(session.user.user_metadata.eglise_maison.trim());
+  const handleAjouterEglise = async (nomBrut) => {
+    try {
+      const { nom, dejaExistant } = await ajouterEglise(nomBrut);
+      await chargerEglises();
+      setForm((f) => ({ ...f, eglise: nom }));
+      if (dejaExistant) {
+        notifier(`« ${nom} » existe déjà — sélectionné automatiquement.`, true);
+      } else {
+        notifier(`Église « ${nom} » ajoutée au groupe.`);
+      }
+      return nom;
+    } catch {
+      notifier("Impossible d'ajouter cette église.", false);
+      throw new Error("ajout impossible");
     }
-    return Array.from(noms).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [rapports, session]);
+  };
 
   const deconnecter = async () => {
     await signOut();
@@ -363,7 +390,8 @@ export default function CompteRenduApp() {
             setFidelite={setFidelite} setMembre={setMembre}
             toggleRoutine={toggleRoutine} ajouterMembre={ajouterMembre}
             retirerMembre={retirerMembre} enregistrer={enregistrer}
-            sauvegarde={sauvegarde} eglisesConnues={eglisesConnues}
+            sauvegarde={sauvegarde} eglises={eglises}
+            onAjouterEglise={handleAjouterEglise}
             annulerEdition={() => { setForm(formDepuisProfil(session.user.user_metadata)); setEditId(null); }}
           />
         ) : (
@@ -387,7 +415,7 @@ export default function CompteRenduApp() {
 // ============ Formulaire ============
 function FormulaireRapport({
   form, setForm, editId, setFidelite, setMembre, toggleRoutine,
-  ajouterMembre, retirerMembre, enregistrer, sauvegarde, annulerEdition, eglisesConnues,
+  ajouterMembre, retirerMembre, enregistrer, sauvegarde, annulerEdition, eglises, onAjouterEglise,
 }) {
   return (
     <div className="space-y-5">
@@ -398,7 +426,7 @@ function FormulaireRapport({
             onChange={(v) => setForm((f) => ({ ...f, chef: v }))} placeholder="Ex. : Junior" />
           <ChampEglise label="Église de maison" valeur={form.eglise}
             onChange={(v) => setForm((f) => ({ ...f, eglise: v }))}
-            options={eglisesConnues} />
+            options={eglises} onAjouter={onAjouterEglise} />
           <ChampSemaine label="Semaine" valeur={form.semaine}
             onChange={(v) => setForm((f) => ({ ...f, semaine: v }))} />
         </div>
@@ -860,41 +888,83 @@ function ChampSemaine({ label, valeur, onChange }) {
   );
 }
 
-function ChampEglise({ label, valeur, onChange, options = [] }) {
-  const listId = "eglises-maison-list";
+function ChampEglise({ label, valeur, onChange, options = [], onAjouter }) {
+  const [ajoutOuvert, setAjoutOuvert] = useState(false);
+  const [nouveauNom, setNouveauNom] = useState("");
+  const [chargement, setChargement] = useState(false);
+
+  const selectValue = options.includes(valeur) ? valeur : "";
+
+  const soumettreAjout = async (e) => {
+    e.preventDefault();
+    if (!nouveauNom.trim()) return;
+    setChargement(true);
+    try {
+      await onAjouter(nouveauNom);
+      setNouveauNom("");
+      setAjoutOuvert(false);
+    } catch {
+      /* message géré par le parent */
+    }
+    setChargement(false);
+  };
 
   return (
     <div className="block">
       <span className="text-xs font-bold uppercase tracking-wider" style={{ color: ORANGE_DARK }}>{label}</span>
-      <input
-        type="text"
-        value={valeur}
-        list={listId}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Ex. : Joseph"
-        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none"
-        style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM }}
-      />
-      <datalist id={listId}>
+
+      <select
+        value={selectValue}
+        onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
+        required
+        className="mt-1 w-full rounded-lg px-3 py-2.5 text-sm outline-none cursor-pointer font-medium"
+        style={{ border: "1px solid #E8D5B8", backgroundColor: CREAM, color: selectValue ? INK : "#8A7358" }}
+      >
+        <option value="" disabled>{options.length ? "Choisir une église de maison" : "Aucune église — ajoutez la première"}</option>
         {options.map((nom) => (
-          <option key={nom} value={nom} />
+          <option key={nom} value={nom}>{nom}</option>
         ))}
-      </datalist>
-      {options.length > 0 && (
-        <select
-          value={options.includes(valeur) ? valeur : ""}
-          onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
-          className="mt-1.5 w-full rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
-          style={{ border: "1px solid #E8D5B8", backgroundColor: "white", color: "#8A7358" }}
-        >
-          <option value="">Choisir dans la liste ({options.length})</option>
-          {options.map((nom) => (
-            <option key={nom} value={nom}>{nom}</option>
-          ))}
-        </select>
+      </select>
+
+      {!ajoutOuvert ? (
+        <button type="button" onClick={() => setAjoutOuvert(true)}
+          className="mt-2 w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5"
+          style={{ border: `1.5px dashed ${ORANGE}`, color: ORANGE_DARK }}>
+          <Plus className="w-4 h-4" /> Ajouter une église de maison
+        </button>
+      ) : (
+        <form onSubmit={soumettreAjout} className="mt-2 p-3 rounded-lg space-y-2"
+          style={{ backgroundColor: CARD, border: "1px solid #E8D5B8" }}>
+          <p className="text-xs font-semibold" style={{ color: BROWN }}>Nouvelle église de maison</p>
+          <input
+            type="text"
+            value={nouveauNom}
+            onChange={(e) => setNouveauNom(e.target.value)}
+            placeholder="Ex. : Joseph"
+            autoFocus
+            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+            style={{ border: "1px solid #E8D5B8", backgroundColor: "white" }}
+          />
+          <p className="text-xs" style={{ color: "#8A7358" }}>
+            Le nom est formaté automatiquement (ex. « joseph » → « Joseph »). Les doublons sont refusés.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setAjoutOuvert(false); setNouveauNom(""); }}
+              className="flex-1 py-2 rounded-lg text-sm font-semibold"
+              style={{ border: "1px solid #C9B394", color: BROWN }}>
+              Annuler
+            </button>
+            <button type="submit" disabled={chargement || !nouveauNom.trim()}
+              className="flex-1 py-2 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-1"
+              style={{ backgroundColor: ORANGE, opacity: chargement ? 0.7 : 1 }}>
+              {chargement ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ajouter"}
+            </button>
+          </div>
+        </form>
       )}
-      <p className="text-xs mt-1" style={{ color: "#8A7358" }}>
-        Votre choix est mémorisé pour vos prochaines connexions.
+
+      <p className="text-xs mt-1.5" style={{ color: "#8A7358" }}>
+        Votre choix est mémorisé à chaque connexion. Une seule entrée par église dans la liste commune.
       </p>
     </div>
   );
