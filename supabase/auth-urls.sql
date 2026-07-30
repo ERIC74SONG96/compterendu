@@ -1,13 +1,13 @@
 -- Configuration Supabase Auth (Dashboard, pas SQL)
 -- Authentication → URL Configuration
+--   https://supabase.com/dashboard/project/uturszvczqxxqkdzehcj/auth/url-configuration
 --
--- Site URL :
+-- ⚠️ OBLIGATOIRE — Site URL (PAS localhost) :
 --   https://compterendu.vercel.app
 --
 -- Redirect URLs (une par ligne) :
 --   https://compterendu.vercel.app/**
 --   http://localhost:5173/**
---   http://localhost:3000/**
 --
--- Sans ces URLs, le lien de confirmation e-mail renvoie vers localhost
--- et affiche ERR_CONNECTION_REFUSED.
+-- Si Site URL = localhost, les liens de confirmation renvoient vers localhost
+-- même quand l'inscription se fait sur compterendu.vercel.app.

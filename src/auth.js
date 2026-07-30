@@ -1,12 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "./supabase-config";
 
+/** URL publique de l'app — utilisée pour la confirmation e-mail (jamais localhost). */
+const APP_URL = (
+  import.meta.env.VITE_APP_URL || "https://compterendu.vercel.app"
+).replace(/\/$/, "");
+
 /** URL de retour après confirmation e-mail (doit être autorisée dans Supabase Auth). */
 export function getAuthRedirectUrl() {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
-  }
-  return import.meta.env.VITE_APP_URL || "https://compterendu.vercel.app";
+  // Toujours la prod : évite localhost si inscription depuis le PC en dev,
+  // ou si Supabase retombe sur Site URL quand redirect_to est invalide.
+  return APP_URL;
 }
 
 export const supabase = SUPABASE_URL && SUPABASE_KEY

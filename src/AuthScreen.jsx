@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Flame, Loader2, Mail, Lock, User, CheckCircle2, XCircle, Info } from "lucide-react";
-import { signIn, signUp, renvoyerConfirmationEmail, traduireErreurAuth } from "./auth";
+import { signIn, signUp, renvoyerConfirmationEmail, traduireErreurAuth, getAuthRedirectUrl } from "./auth";
 
 function extraireTexteErreur(err) {
   if (!err) return "Une erreur est survenue. Réessayez.";
@@ -213,7 +213,7 @@ export default function AuthScreen({ onMessage }) {
                   Un message a été envoyé à{" "}
                   <strong className="break-all">{attenteConfirmation}</strong>.
                   Ouvrez votre boîte mail (vérifiez aussi les <strong>spams</strong>), cliquez sur le lien de confirmation — vous serez redirigé vers{" "}
-                  <strong>compterendu.vercel.app</strong>, puis connectez-vous.
+                  <strong>{getAuthRedirectUrl().replace(/^https?:\/\//, "")}</strong>, puis connectez-vous.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-3">
                   <button
