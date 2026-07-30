@@ -779,9 +779,7 @@ function TableauDeBord({
                       </div>
 
                       {/* Compte rendu personnel */}
-                      {r.compte_perso && (
-                        <AffichageComptePerso compte={r.compte_perso} />
-                      )}
+                      <AffichageComptePerso compte={r.compte_perso} />
 
                       {/* Membres */}
                       {(r.membres || []).length > 0 && (
@@ -1195,7 +1193,16 @@ function AffichageComptePerso({ compte }) {
     (cp.livre_nom?.trim() || cp.livre_pages > 0) && `Livre chrétien : ${cp.livre_nom?.trim() || "—"}${cp.livre_pages > 0 ? ` · ${cp.livre_pages} pages` : ""}`,
   ].filter(Boolean);
 
-  if (!lignes.length) return null;
+  if (!lignes.length) {
+    return (
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: ORANGE_DARK, fontFamily: "system-ui, sans-serif" }}>
+          Compte rendu personnel du chef
+        </h3>
+        <p className="text-sm italic" style={{ color: "#8A7358" }}>Non renseigné pour cette semaine.</p>
+      </div>
+    );
+  }
 
   return (
     <div>
